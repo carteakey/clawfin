@@ -1,0 +1,47 @@
+# ─── ClawFin Docker Compose ──────────────────────────────────────────
+# Usage:
+#   docker compose up              (backend + frontend)
+#   docker compose --profile ai-local up  (+ Ollama sidecar)
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8000:8000"
+    env_file: .env
+    volumes:
+      - clawfin-data:/data
+    environment:
+      - CLAWFIN_DB_PATH=/data/clawfin.db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Optional: local Ollama for AI features
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ai-local"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  clawfin-data:
+  ollama-data:

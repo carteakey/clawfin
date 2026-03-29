@@ -68,6 +68,12 @@ export const api = {
       method: 'POST', headers,
       body: JSON.stringify({ message, history }),
     });
+    
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP error! status: ${res.status}`);
+    }
+
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';

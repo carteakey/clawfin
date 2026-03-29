@@ -7,3 +7,5 @@ node_modules
 *.csv
 frontend/dist/
 __pycache__/
+
+inbox

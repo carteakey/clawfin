@@ -30,9 +30,7 @@ def normalize(header_row: list[str], rows: list[list[str]]) -> list[dict]:
         if amount == 0.0:
             continue
 
-        # BMO reverses sign convention: positive = debit, negative = credit
-        amount = -amount
-
+        # BMO uses standard sign convention: negative = debit, positive = credit
         merchant = row[desc_idx].strip() if desc_idx is not None else ""
         if not merchant:
             continue

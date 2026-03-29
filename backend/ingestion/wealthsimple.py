@@ -27,8 +27,8 @@ def parse_holdings(header_row: list[str], rows: list[list[str]]) -> list[dict]:
     # Map columns
     acct_name_idx = _find_col(headers, ["account name"])
     acct_type_idx = _find_col(headers, ["account type"])
-    symbol_idx = _find_col(headers, ["symbol"])
-    name_idx = _find_col(headers, ["name"])
+    symbol_idx = _find_col(headers, ["symbol", "ticker"])
+    name_idx = _find_col(headers, ["security name", "name"])
     security_type_idx = _find_col(headers, ["security type"])
     qty_idx = _find_col(headers, ["quantity"])
     price_idx = _find_col(headers, ["market price"])
@@ -36,8 +36,8 @@ def parse_holdings(header_row: list[str], rows: list[list[str]]) -> list[dict]:
     book_cad_idx = _find_col(headers, ["book value (cad)"])
     book_market_idx = _find_col(headers, ["book value (market)"])
     book_market_currency_idx = _find_col(headers, ["book value currency (market)"])
-    market_val_idx = _find_col(headers, ["market value"])
-    market_val_currency_idx = _find_col(headers, ["market value currency"])
+    market_val_idx = _find_col(headers, ["market value (cad)", "market value"])
+    market_val_currency_idx = _find_col(headers, ["market value currency (cad)", "market value currency", "currency"])
     unrealized_idx = _find_col(headers, ["market unrealized returns"])
     exchange_idx = _find_col(headers, ["exchange"])
 

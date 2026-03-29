@@ -28,7 +28,10 @@ class Settings:
     # Server
     HOST: str = os.getenv("CLAWFIN_HOST", "0.0.0.0")
     PORT: int = int(os.getenv("CLAWFIN_PORT", "8000"))
-    CORS_ORIGINS: list[str] = os.getenv("CLAWFIN_CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+    CORS_ORIGINS: list[str] = os.getenv(
+        "CLAWFIN_CORS_ORIGINS",
+        "http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:3000",
+    ).split(",")
 
 
 settings = Settings()

@@ -137,9 +137,25 @@ export default function ImportView() {
               <div style={{ color: 'var(--positive)', marginBottom: '8px' }}>✅ Import complete</div>
               {result.bank && <div style={{ color: 'var(--text-dim)', fontSize: '12px' }}>Bank: {result.bank}</div>}
               {result.type && <div style={{ color: 'var(--text-dim)', fontSize: '12px' }}>Type: {result.type}</div>}
+              {result.accounts_synced !== undefined && (
+                <div style={{ color: 'var(--text-dim)', fontSize: '12px' }}>Accounts synced: {result.accounts_synced}</div>
+              )}
               {result.imported !== undefined && (
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', marginTop: '4px' }}>
                   {result.imported} imported{result.skipped ? `, ${result.skipped} skipped (duplicates)` : ''}
+                </div>
+              )}
+              {result.access_url && (
+                <div style={{ marginTop: '12px' }}>
+                  <div style={{ color: 'var(--text-dim)', fontSize: '12px', marginBottom: '8px' }}>
+                    Success! To finish setup, add this URL to your <code>.env</code> file as <code>CLAWFIN_SIMPLEFIN_ACCESS_URL</code> and restart the backend.
+                  </div>
+                  <pre style={{
+                    background: 'var(--bg-input)', padding: '8px', border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-sm)', overflowX: 'auto', fontSize: '12px', color: 'var(--positive)'
+                  }}>
+                    {result.access_url}
+                  </pre>
                 </div>
               )}
             </div>

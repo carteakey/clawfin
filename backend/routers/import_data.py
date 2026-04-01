@@ -156,8 +156,10 @@ async def simplefin_sync(db: Session = Depends(get_db)):
     if not access_url:
         raise HTTPException(status_code=400, detail="SimpleFin not configured. Set CLAWFIN_SIMPLEFIN_ACCESS_URL.")
 
+    from datetime import timedelta
     client = SimpleFinClient(access_url)
-    raw_data = await client.fetch_accounts()
+    start_date = date.today() - timedelta(days=90)
+    raw_data = await client.fetch_accounts(start_date=start_date)
 
     # Sync accounts
     sf_accounts = client.normalize_accounts(raw_data)
@@ -208,6 +210,6 @@ async def simplefin_sync(db: Session = Depends(get_db)):
 
     return {
         "accounts_synced": len(sf_accounts),
-        "transactions_imported": len(new_txs),
-        "transactions_skipped": skipped,
+        "imported": len(new_txs),
+        "skipped": skipped,
     }

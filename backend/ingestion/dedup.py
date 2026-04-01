@@ -20,36 +20,55 @@ def dedup_transactions(
     Returns:
         (new_transactions, skipped_count)
     """
-    new = []
-    skipped = 0
+    from collections import defaultdict
 
+    # 1. Group incoming transactions by their base fingerprint
+    incoming_groups = defaultdict(list)
     for tx in transactions:
         tx_date = date.fromisoformat(tx["date"])
         merchant = tx.get("merchant", "")
         amount = tx.get("amount", 0.0)
         acct_id = tx.get("account_id", account_id)
+        
+        # Base signature ignores sequence
+        sig = (tx_date, amount, merchant.strip().lower(), acct_id)
+        incoming_groups[sig].append(tx)
 
-        # Try sequence 0, 1, 2... until we find an unused hash
-        sequence = 0
-        while True:
-            h = Transaction.compute_hash(tx_date, amount, merchant, acct_id, sequence)
+    new = []
+    skipped = 0
 
-            existing = db.query(Transaction.id).filter(Transaction.hash == h).first()
-            if existing is None:
-                # This hash is free — it's either a genuinely new tx,
-                # or a duplicate we haven't seen at this sequence yet
-                tx["hash"] = h
-                tx["sequence"] = sequence
+    # 2. For each group, determine how many exist in the DB
+    for sig, txs in incoming_groups.items():
+        tx_date, amount, merchant_lower, acct_id = sig
+        n_incoming = len(txs)
+
+        # We check hashes 0 to n_incoming - 1
+        existing_count = 0
+        for seq in range(n_incoming):
+            h = Transaction.compute_hash(tx_date, amount, merchant_lower, acct_id, seq)
+            exists = db.query(Transaction.id).filter(Transaction.hash == h).first()
+            if exists:
+                existing_count += 1
+            else:
+                # Assuming dense sequences, if seq N is missing, N+1 is missing too.
+                break
+        
+        # If we have more incoming than existing, insert the difference
+        if n_incoming > existing_count:
+            # We skip 'existing_count' transactions, and insert the rest
+            transactions_to_insert = txs[existing_count:]
+            skipped += existing_count
+            
+            # Start assigning sequences from 'existing_count'
+            current_seq = existing_count
+            for tx in transactions_to_insert:
+                tx["hash"] = Transaction.compute_hash(tx_date, amount, merchant_lower, acct_id, current_seq)
+                tx["sequence"] = current_seq
                 tx["account_id"] = acct_id
                 new.append(tx)
-                break
-            else:
-                # Hash exists. Is this the same tx (duplicate import) or a different one?
-                # Check if there's a matching tx at the next sequence
-                sequence += 1
-                if sequence > 50:
-                    # Safety valve: more than 50 identical txs in one day is unlikely
-                    skipped += 1
-                    break
+                current_seq += 1
+        else:
+            # All incoming transactions already exist
+            skipped += n_incoming
 
     return new, skipped

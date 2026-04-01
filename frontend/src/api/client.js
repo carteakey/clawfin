@@ -17,7 +17,17 @@ async function request(path, options = {}) {
     window.location.reload();
   }
 
-  return res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const errorMsg = data.detail || data.error || `HTTP Error ${res.status}`;
+    // Optionally handle generic 422 validation details from FastAPI
+    if (Array.isArray(data.detail)) {
+      throw new Error(`Validation Error: ${data.detail[0]?.msg}`);
+    }
+    throw new Error(errorMsg);
+  }
+
+  return data;
 }
 
 export const api = {
@@ -30,7 +40,10 @@ export const api = {
 
   // Transactions
   getTransactions: (params = {}) => {
-    const qs = new URLSearchParams(params).toString();
+    const cleanParams = Object.fromEntries(
+      Object.entries(params).filter(([_, v]) => v !== undefined && v !== null && v !== '')
+    );
+    const qs = new URLSearchParams(cleanParams).toString();
     return request(`/transactions?${qs}`);
   },
   updateTransaction: (id, data) => request(`/transactions/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),

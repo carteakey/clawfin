@@ -166,17 +166,29 @@ async def simplefin_sync(db: Session = Depends(get_db)):
     account_map = {}  # external_id -> db account_id
 
     for acct in sf_accounts:
+        inferred = acct.get("account_type", "other")
+        try:
+            acct_type = AccountType(inferred)
+        except ValueError:
+            acct_type = AccountType.OTHER
         existing = db.query(Account).filter(Account.external_id == acct["external_id"]).first()
         if existing:
             existing.balance = acct["balance"]
+            existing.available_balance = acct.get("available_balance")
+            existing.balance_date = acct.get("balance_date")
+            # Only backfill type if it was the default chequing (i.e. previously imported with hardcoded type)
+            if existing.account_type == AccountType.CHEQUING and acct_type != AccountType.CHEQUING:
+                existing.account_type = acct_type
             account_map[acct["external_id"]] = existing.id
         else:
             new_acct = Account(
                 institution=acct["institution"],
                 name=acct["name"],
-                account_type=AccountType.CHEQUING,  # Default; user can change
+                account_type=acct_type,
                 currency=acct["currency"],
                 balance=acct["balance"],
+                available_balance=acct.get("available_balance"),
+                balance_date=acct.get("balance_date"),
                 source=DataSource.SIMPLEFIN,
                 external_id=acct["external_id"],
             )
@@ -204,6 +216,8 @@ async def simplefin_sync(db: Session = Depends(get_db)):
             hash=tx["hash"],
             sequence=tx.get("sequence", 0),
             description=tx.get("description"),
+            memo=tx.get("memo"),
+            pending=tx.get("pending", False),
         ))
 
     db.commit()

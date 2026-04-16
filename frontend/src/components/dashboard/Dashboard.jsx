@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../../store/ledger';
-import { formatCurrency, formatDelta, cn } from '../../utils/format';
+import { formatCurrency, formatDelta } from '../../utils/format';
 import { BarChart, Bar, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
+import Waterfall from './Waterfall';
+
+const PERIODS = [
+  { d: 7,   l: '7D' },
+  { d: 30,  l: '30D' },
+  { d: 90,  l: '90D' },
+  { d: 365, l: '1Y' },
+];
 
 export default function Dashboard() {
   const { dashboard, dashboardLoading, fetchDashboard } = useStore();
@@ -9,7 +17,7 @@ export default function Dashboard() {
 
   useEffect(() => { fetchDashboard(days); }, [days]);
 
-  if (dashboardLoading && !dashboard) return <div className="loading">Loading dashboard...</div>;
+  if (dashboardLoading && !dashboard) return <div className="loading label">Loading…</div>;
   if (!dashboard) return <EmptyState />;
 
   const { kpis, spending_breakdown, top_merchants, daily_spending } = dashboard;
@@ -20,62 +28,90 @@ export default function Dashboard() {
   }));
 
   return (
-    <div className="fade-in">
+    <>
+      {/* Hero net worth */}
+      <div className="hero-stat">
+        <div className="l">Net Worth</div>
+        <div className="v">{formatCurrency(kpis.net_worth)}</div>
+        <div className="d">
+          Income {formatCurrency(kpis.income)} · Expenses {formatCurrency(kpis.expenses)} · Savings {kpis.savings_rate}%
+        </div>
+      </div>
+
       {/* Period selector */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-        {[7, 30, 90, 365].map((d) => (
-          <button key={d} className={cn('btn', d === days ? 'btn-primary' : 'btn-ghost')} onClick={() => setDays(d)}>
-            {d === 365 ? '1Y' : `${d}d`}
+      <div className="flex gap-2 mb-4">
+        {PERIODS.map(({ d, l }) => (
+          <button
+            key={d}
+            type="button"
+            className={`btn ${d === days ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setDays(d)}
+          >
+            {l}
           </button>
         ))}
       </div>
 
-      {/* KPI Strip */}
-      <div className="kpi-strip">
-        <KpiCard label="Income" value={formatCurrency(kpis.income)} delta={kpis.income_delta_pct} positive />
-        <KpiCard label="Expenses" value={formatCurrency(kpis.expenses)} delta={kpis.expenses_delta_pct} />
-        <KpiCard label="Savings Rate" value={`${kpis.savings_rate}%`} />
-        <KpiCard label="Net Worth" value={formatCurrency(kpis.net_worth)} />
+      {/* KPI row */}
+      <div className="kpi-row">
+        <Kpi label="Income" value={formatCurrency(kpis.income)} delta={kpis.income_delta_pct} goodWhenUp />
+        <Kpi label="Expenses" value={formatCurrency(kpis.expenses)} delta={kpis.expenses_delta_pct} goodWhenUp={false} />
+        <Kpi label="Savings Rate" value={`${kpis.savings_rate}%`} />
+        <Kpi label="Txns" value={dashboard.transaction_count} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-        {/* Spending by Category */}
-        <div className="card">
-          <div className="card-title">Spending by Category</div>
-          <div className="spending-grid">
-            {(spending_breakdown || []).slice(0, 8).map((cat) => (
-              <div className="spending-row" key={cat.category}>
-                <span className="category">{cat.category}</span>
-                <span className="amount">{formatCurrency(cat.amount)}</span>
-                <span className="pct">{cat.pct_of_total}%</span>
-                <span className={cn('delta', cat.delta_pct > 0 ? 'positive' : 'negative')}>
-                  {formatDelta(cat.delta_pct)}
-                </span>
-                <div className="spending-bar">
-                  <div className="spending-bar-fill" style={{ width: `${cat.pct_of_total}%` }} />
-                </div>
+      {/* Cash flow waterfall */}
+      <div className="section">
+        <div className="section-head">
+          <h2>Cash Flow</h2>
+          <span className="label num">{days}d window</span>
+        </div>
+        <Waterfall income={kpis.income} breakdown={spending_breakdown} />
+      </div>
+
+      {/* Spending + Merchants */}
+      <div className="grid-2 mb-5">
+        <div>
+          <div className="block-title">Spending by Category</div>
+          {(spending_breakdown || []).slice(0, 8).map((cat) => (
+            <div
+              key={cat.category}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 90px 48px 1fr',
+                alignItems: 'center',
+                gap: 'var(--sp-3)',
+                padding: 'var(--sp-2) 0',
+                borderBottom: '1px solid var(--rule)',
+                fontSize: 12,
+              }}
+            >
+              <span>{cat.category}</span>
+              <span className="num text-right">{formatCurrency(cat.amount)}</span>
+              <span className="num text-right muted">{cat.pct_of_total}%</span>
+              <div className="bar">
+                <div className="bar-fill" style={{ width: `${cat.pct_of_total}%` }} />
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
 
-        {/* Top Merchants */}
-        <div className="card">
-          <div className="card-title">Top Merchants</div>
-          <table className="dense">
+        <div>
+          <div className="block-title">Top Merchants</div>
+          <table className="dense" style={{ border: 'none' }}>
             <thead>
               <tr>
                 <th>Merchant</th>
-                <th className="amount">Spent</th>
-                <th className="amount">Txns</th>
+                <th className="r">Spent</th>
+                <th className="r">N</th>
               </tr>
             </thead>
             <tbody>
               {(top_merchants || []).slice(0, 10).map((m, i) => (
                 <tr key={i}>
                   <td>{m.merchant}</td>
-                  <td className="amount mono">{formatCurrency(m.amount)}</td>
-                  <td className="amount mono">{m.count}</td>
+                  <td className="num r">{formatCurrency(m.amount)}</td>
+                  <td className="num r muted">{m.count}</td>
                 </tr>
               ))}
             </tbody>
@@ -83,36 +119,41 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Daily Spending Chart */}
+      {/* Daily spending */}
       {dailyData.length > 0 && (
-        <div className="card" style={{ marginTop: '16px' }}>
-          <div className="card-title">Daily Spending</div>
-          <ResponsiveContainer width="100%" height={120}>
-            <BarChart data={dailyData}>
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#5A5A55' }} axisLine={false} tickLine={false} />
-              <Tooltip
-                contentStyle={{ background: '#161616', border: '1px solid #2A2A28', borderRadius: 6, fontSize: 12 }}
-                labelStyle={{ color: '#888780' }}
-                formatter={(v) => [formatCurrency(v), 'Spent']}
-              />
-              <Bar dataKey="amount" fill="#1D9E75" radius={[2, 2, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="section">
+          <div className="section-head">
+            <h2>Daily Spending</h2>
+            <span className="label num">{dailyData.length} days</span>
+          </div>
+          <div style={{ border: '1px solid var(--ink)', padding: 'var(--sp-4)' }}>
+            <ResponsiveContainer width="100%" height={140}>
+              <BarChart data={dailyData}>
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  cursor={{ fill: 'var(--hover)' }}
+                  formatter={(v) => [formatCurrency(v), 'Spent']}
+                />
+                <Bar dataKey="amount" fill="var(--ink)" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
-function KpiCard({ label, value, delta, positive }) {
+function Kpi({ label, value, delta, goodWhenUp }) {
+  const hasDelta = delta !== undefined && delta !== null;
+  const bad = hasDelta && (goodWhenUp === false ? delta > 0 : delta < 0);
+  const good = hasDelta && (goodWhenUp === false ? delta < 0 : delta > 0);
   return (
-    <div className="kpi-card">
-      <div className="kpi-label">{label}</div>
-      <div className="kpi-value">{value}</div>
-      {delta !== undefined && (
-        <div className={cn('kpi-delta', delta >= 0 ? (positive ? 'positive' : 'negative') : (positive ? 'negative' : 'positive'))}>
-          {formatDelta(delta)}
-        </div>
+    <div className="kpi">
+      <div className="l">{label}</div>
+      <div className="v">{value}</div>
+      {hasDelta && (
+        <div className={`d ${good ? 'pos' : bad ? 'neg' : ''}`}>{formatDelta(delta)}</div>
       )}
     </div>
   );
@@ -121,11 +162,12 @@ function KpiCard({ label, value, delta, positive }) {
 function EmptyState() {
   const { setView } = useStore();
   return (
-    <div style={{ textAlign: 'center', padding: '80px 0' }}>
-      <div style={{ fontSize: '48px', marginBottom: '16px' }}>🐾</div>
-      <h2 style={{ fontSize: '20px', marginBottom: '8px' }}>No data yet</h2>
-      <p style={{ color: 'var(--text-dim)', marginBottom: '24px' }}>Import transactions to see your dashboard</p>
-      <button className="btn btn-primary" onClick={() => setView('import')}>Import Data</button>
+    <div style={{ padding: 'var(--sp-8) 0', textAlign: 'center' }}>
+      <div className="label mb-3">No Data</div>
+      <h2 style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 700, marginBottom: 'var(--sp-4)', letterSpacing: '-0.01em' }}>
+        Import transactions to begin.
+      </h2>
+      <button type="button" className="btn btn-primary" onClick={() => setView('import')}>Import Data →</button>
     </div>
   );
 }

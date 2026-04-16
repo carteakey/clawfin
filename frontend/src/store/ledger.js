@@ -7,6 +7,14 @@ export const useStore = create((set, get) => ({
   authRequired: null,
   setAuthenticated: (v) => set({ isAuthenticated: v }),
 
+  // Theme
+  theme: document.documentElement.dataset.theme || 'dark',
+  setTheme: (t) => {
+    document.documentElement.dataset.theme = t;
+    localStorage.setItem('clawfin_theme', t);
+    set({ theme: t });
+  },
+
   // Navigation
   currentView: 'dashboard',
   setView: (view) => set({ currentView: view }),
@@ -33,11 +41,17 @@ export const useStore = create((set, get) => ({
   // Holdings
   holdings: null,
   holdingsLoading: false,
-  fetchHoldings: async () => {
+  fetchHoldings: async (asOf) => {
     set({ holdingsLoading: true });
-    const data = await api.getHoldings();
+    const data = await api.getHoldings(asOf);
     set({ holdings: data, holdingsLoading: false });
   },
+
+  // Command palette
+  paletteOpen: false,
+  openPalette: () => set({ paletteOpen: true }),
+  closePalette: () => set({ paletteOpen: false }),
+  togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
 
   // Chat
   chatOpen: false,

@@ -31,14 +31,45 @@ PROVIDER_DEFAULTS = {
 
 
 def _get_provider_config() -> dict:
+    """Resolve the active provider: AppConfig overrides env."""
     provider = settings.AI_PROVIDER.lower()
+    base_url = settings.AI_BASE_URL
+    model = settings.AI_MODEL
+
+    # AppConfig overrides (best-effort; fall back to env on any error)
+    try:
+        from backend.db.database import SessionLocal
+        from backend.db.models import AppConfig
+        with SessionLocal() as db:
+            override = {
+                row.key: row.value
+                for row in db.query(AppConfig).filter(
+                    AppConfig.key.in_([
+                        "ai_provider_override",
+                        "ai_base_url_override",
+                        "ai_model_override",
+                    ])
+                ).all()
+            }
+            if override.get("ai_provider_override"):
+                provider = override["ai_provider_override"].lower()
+            if override.get("ai_base_url_override"):
+                base_url = override["ai_base_url_override"]
+            if override.get("ai_model_override"):
+                model = override["ai_model_override"]
+    except Exception:
+        pass
+
     defaults = PROVIDER_DEFAULTS.get(provider, PROVIDER_DEFAULTS["openai"])
+    if not base_url:
+        base_url = defaults["base_url"]
     return {
-        "base_url": settings.AI_BASE_URL or defaults["base_url"],
+        "base_url": base_url,
         "chat_path": defaults["chat_path"],
         "format": defaults["format"],
-        "model": settings.AI_MODEL,
+        "model": model,
         "api_key": settings.AI_API_KEY,
+        "provider": provider,
     }
 
 

@@ -37,6 +37,8 @@ export const api = {
 
   // Dashboard
   getDashboard: (days = 30) => request(`/dashboard?days=${days}`),
+  getNetWorth: (period = '1Y') => request(`/dashboard/net-worth?period=${period}`),
+  getCashflowForecast: (months = 3) => request(`/dashboard/cashflow-forecast?months=${months}`),
 
   // Transactions
   getTransactions: (params = {}) => {
@@ -47,9 +49,14 @@ export const api = {
     return request(`/transactions?${qs}`);
   },
   updateTransaction: (id, data) => request(`/transactions/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  getAccounts: () => request('/transactions/accounts'),
+  reinferAccountTypes: () => request('/transactions/accounts/reinfer-types', { method: 'POST' }),
+  getRecurring: () => request('/transactions/recurring'),
+  exportDatabase: () => request('/settings/export'),
 
   // Holdings
-  getHoldings: () => request('/holdings'),
+  getHoldings: (asOf) => request(asOf ? `/holdings?as_of=${asOf}` : '/holdings'),
+  getHoldingsDates: () => request('/holdings/dates'),
 
   // Import
   uploadCSV: async (file, bankHint = null) => {
@@ -110,8 +117,20 @@ export const api = {
   deleteCategory: (id) => request(`/settings/categories/${id}`, { method: 'DELETE' }),
   resetCategories: () => request('/settings/categories/reset', { method: 'POST' }),
   getAIConfig: () => request('/settings/ai'),
+  getAIHealth: () => request('/settings/ai/health'),
   getContributionRoom: () => request('/settings/contribution-room'),
   updateContributionRoom: (data) => request('/settings/contribution-room', { method: 'PUT', body: JSON.stringify(data) }),
+
+  // Categorization rules
+  getRules: () => request('/settings/rules'),
+  createRule: (data) => request('/settings/rules', { method: 'POST', body: JSON.stringify(data) }),
+  updateRule: (id, data) => request(`/settings/rules/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteRule: (id) => request(`/settings/rules/${id}`, { method: 'DELETE' }),
+  recategorize: () => request('/transactions/recategorize', { method: 'POST' }),
+
+  // AI categorization toggle
+  getAIFlags: () => request('/settings/ai/flags'),
+  setAIFlags: (data) => request('/settings/ai/flags', { method: 'PUT', body: JSON.stringify(data) }),
 
   setToken: (token) => { authToken = token; localStorage.setItem('clawfin_token', token); },
 };

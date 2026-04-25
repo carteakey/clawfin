@@ -48,7 +48,6 @@ async def transaction_briefing(
         end_date=req.end_date,
         include_transactions=req.include_transactions,
         max_transactions=req.max_transactions,
-        redact_merchants=req.redact_merchants,
     )
 
     result = {

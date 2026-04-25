@@ -85,7 +85,7 @@ export default function Planning() {
                   cursor={{ stroke: 'var(--ink)', strokeDasharray: '2 2' }}
                   formatter={(v) => [formatCurrency(v), 'Net Worth']}
                 />
-                <Line type="monotone" dataKey="amount" stroke="var(--ink)" strokeWidth={2} dot={false} isAnimationActive={false} />
+                <Line type="monotone" dataKey="amount" stroke="var(--ink)" strokeWidth={2} dot={false} animationDuration={200} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -130,7 +130,7 @@ export default function Planning() {
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={{ stroke: 'var(--ink)' }} tickLine={false} />
                 <YAxis tick={{ fontSize: 10 }} axisLine={{ stroke: 'var(--ink)' }} tickLine={false} width={80} tickFormatter={(v) => formatCurrency(v)} />
                 <Tooltip formatter={(v) => formatCurrency(v)} />
-                <Bar dataKey="net">
+                <Bar dataKey="net" animationDuration={200}>
                   {months.map((m, i) => (
                     <Cell key={i} fill={m.net >= 0 ? 'var(--pos)' : 'var(--neg)'} />
                   ))}

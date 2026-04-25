@@ -50,6 +50,8 @@ export const api = {
   },
   updateTransaction: (id, data) => request(`/transactions/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   getAccounts: () => request('/transactions/accounts'),
+  updateAccount: (id, data) => request(`/transactions/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteAccount: (id) => request(`/transactions/accounts/${id}`, { method: 'DELETE' }),
   reinferAccountTypes: () => request('/transactions/accounts/reinfer-types', { method: 'POST' }),
   getRecurring: () => request('/transactions/recurring'),
   exportDatabase: () => request('/settings/export'),
@@ -76,6 +78,7 @@ export const api = {
     const res = await fetch(`${API_BASE}/import/wealthsimple`, { method: 'POST', headers, body: form });
     return res.json();
   },
+  simpleFinStatus: () => request('/import/simplefin/status'),
   simpleFinSetup: (token) => request('/import/simplefin/setup', { method: 'POST', body: JSON.stringify({ setup_token: token }) }),
   simpleFinSync: () => request('/import/simplefin/sync', { method: 'POST' }),
 

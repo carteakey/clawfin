@@ -4,11 +4,35 @@ from datetime import date, timedelta
 from statistics import mean, median
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from backend.db.database import get_db
-from backend.db.models import Transaction, Account, Holding, Snapshot
+from backend.db.models import Transaction, Account, AccountType, Holding, Snapshot
 
 router = APIRouter()
+
+INVESTMENT_ACCOUNT_TYPES = {
+    AccountType.TFSA,
+    AccountType.RRSP,
+    AccountType.FHSA,
+    AccountType.MARGIN,
+    AccountType.CRYPTO,
+}
+
+
+def _budget_transaction_query(db: Session):
+    """Transactions that belong to cash-flow/budget reporting."""
+    from sqlalchemy import and_
+    return (
+        db.query(Transaction)
+        .outerjoin(Account, Transaction.account_id == Account.id)
+        .filter(or_(
+            Transaction.account_id.is_(None),
+            and_(
+                Account.account_type.notin_(INVESTMENT_ACCOUNT_TYPES),
+                Account.on_budget.is_(True)
+            )
+        ))
+    )
 
 
 @router.get("")
@@ -20,8 +44,8 @@ def get_dashboard(
     prev_cutoff = cutoff - timedelta(days=days)
 
     # Current period transactions
-    txs = db.query(Transaction).filter(Transaction.date >= cutoff).all()
-    prev_txs = db.query(Transaction).filter(
+    txs = _budget_transaction_query(db).filter(Transaction.date >= cutoff).all()
+    prev_txs = _budget_transaction_query(db).filter(
         Transaction.date >= prev_cutoff, Transaction.date < cutoff
     ).all()
 
@@ -33,12 +57,12 @@ def get_dashboard(
 
     savings_rate = ((income - expenses) / income * 100) if income > 0 else 0
 
-    # Net worth
+    # Account balance only. Holdings are reported separately to avoid double-counting
+    # investment accounts that already sync as SimpleFIN account balances.
     accounts = db.query(Account).all()
     holdings = db.query(Holding).all()
-    total_cash = sum(a.balance for a in accounts)
-    total_investments = sum(h.market_value for h in holdings)
-    net_worth = total_cash + total_investments
+    total_accounts = sum(a.balance for a in accounts)
+    total_holdings = sum(h.market_value for h in holdings)
 
     # Spending by category
     category_spending = {}
@@ -97,7 +121,10 @@ def get_dashboard(
             "income": round(income, 2),
             "expenses": round(expenses, 2),
             "savings_rate": round(savings_rate, 1),
-            "net_worth": round(net_worth, 2),
+            "net_worth": round(total_accounts, 2),
+            "account_balance": round(total_accounts, 2),
+            "holdings_market_value": round(total_holdings, 2),
+            "net_worth_source": "accounts_only",
             "income_delta_pct": round(((income - prev_income) / prev_income * 100) if prev_income > 0 else 0, 1),
             "expenses_delta_pct": round(((expenses - prev_expenses) / prev_expenses * 100) if prev_expenses > 0 else 0, 1),
         },
@@ -145,13 +172,10 @@ def get_net_worth(
 
     # Synthesize from current balances + transaction history
     accounts = db.query(Account).all()
-    holdings = db.query(Holding).all()
-    cash_now = sum(a.balance for a in accounts)
-    investments_now = sum(h.market_value for h in holdings)
-    current = cash_now + investments_now
+    current = sum(a.balance for a in accounts)
 
     txs = (
-        db.query(Transaction)
+        _budget_transaction_query(db)
         .filter(Transaction.date >= cutoff)
         .order_by(Transaction.date.asc())
         .all()
@@ -245,7 +269,7 @@ def get_cashflow_forecast(
     db: Session = Depends(get_db),
 ):
     lookback = date.today() - timedelta(days=180)
-    txs = db.query(Transaction).filter(Transaction.date >= lookback).all()
+    txs = _budget_transaction_query(db).filter(Transaction.date >= lookback).all()
     recurring = _detect_recurring(txs)
 
     today = date.today()

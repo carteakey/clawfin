@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../../store/ledger';
-import { formatCurrency, formatDelta } from '../../utils/format';
+import { api } from '../../api/client';
+import { formatCurrency, formatDelta, formatMoney } from '../../utils/format';
 import { BarChart, Bar, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import Waterfall from './Waterfall';
 
@@ -13,9 +14,21 @@ const PERIODS = [
 
 export default function Dashboard() {
   const { dashboard, dashboardLoading, fetchDashboard } = useStore();
+  const hideBalances = useStore((s) => s.hideBalances);
   const [days, setDays] = useState(30);
+  const [categoryColors, setCategoryColors] = useState({});
 
   useEffect(() => { fetchDashboard(days); }, [days]);
+
+  useEffect(() => {
+    api.getCategories().then((d) => {
+      const map = {};
+      for (const c of d.categories || []) {
+        if (c.color) map[c.name] = c.color;
+      }
+      setCategoryColors(map);
+    }).catch(() => {});
+  }, []);
 
   if (dashboardLoading && !dashboard) return <div className="loading label">Loading…</div>;
   if (!dashboard) return <EmptyState />;
@@ -31,10 +44,11 @@ export default function Dashboard() {
     <>
       {/* Hero net worth */}
       <div className="hero-stat">
-        <div className="l">Net Worth</div>
-        <div className="v">{formatCurrency(kpis.net_worth)}</div>
+        <div className="l">Account Balance</div>
+        <div className="v">{formatMoney(kpis.account_balance ?? kpis.net_worth, 'CAD', hideBalances)}</div>
         <div className="d">
-          Income {formatCurrency(kpis.income)} · Expenses {formatCurrency(kpis.expenses)} · Savings {kpis.savings_rate}%
+          Income {formatMoney(kpis.income, 'CAD', hideBalances)} · Expenses {formatMoney(kpis.expenses, 'CAD', hideBalances)} · Savings {kpis.savings_rate}%
+          {kpis.holdings_market_value ? ` · Holdings separate ${formatMoney(kpis.holdings_market_value, 'CAD', hideBalances)}` : ''}
         </div>
       </div>
 
@@ -54,8 +68,8 @@ export default function Dashboard() {
 
       {/* KPI row */}
       <div className="kpi-row">
-        <Kpi label="Income" value={formatCurrency(kpis.income)} delta={kpis.income_delta_pct} goodWhenUp />
-        <Kpi label="Expenses" value={formatCurrency(kpis.expenses)} delta={kpis.expenses_delta_pct} goodWhenUp={false} />
+        <Kpi label="Income" value={formatMoney(kpis.income, 'CAD', hideBalances)} delta={kpis.income_delta_pct} goodWhenUp />
+        <Kpi label="Expenses" value={formatMoney(kpis.expenses, 'CAD', hideBalances)} delta={kpis.expenses_delta_pct} goodWhenUp={false} />
         <Kpi label="Savings Rate" value={`${kpis.savings_rate}%`} />
         <Kpi label="Txns" value={dashboard.transaction_count} />
       </div>
@@ -66,7 +80,7 @@ export default function Dashboard() {
           <h2>Cash Flow</h2>
           <span className="label num">{days}d window</span>
         </div>
-        <Waterfall income={kpis.income} breakdown={spending_breakdown} />
+        <Waterfall income={kpis.income} breakdown={spending_breakdown} categoryColors={categoryColors} />
       </div>
 
       {/* Spending + Merchants */}
@@ -87,10 +101,17 @@ export default function Dashboard() {
               }}
             >
               <span>{cat.category}</span>
-              <span className="num text-right">{formatCurrency(cat.amount)}</span>
+              <span className="num text-right">{formatMoney(cat.amount, 'CAD', hideBalances)}</span>
               <span className="num text-right muted">{cat.pct_of_total}%</span>
               <div className="bar">
-                <div className="bar-fill" style={{ width: `${cat.pct_of_total}%` }} />
+                <div
+                  className="bar-fill"
+                  style={{
+                    width: `${cat.pct_of_total}%`,
+                    background: categoryColors[cat.category] || 'var(--ink)',
+                    opacity: categoryColors[cat.category] ? 0.85 : 1,
+                  }}
+                />
               </div>
             </div>
           ))}
@@ -110,7 +131,7 @@ export default function Dashboard() {
               {(top_merchants || []).slice(0, 10).map((m, i) => (
                 <tr key={i}>
                   <td>{m.merchant}</td>
-                  <td className="num r">{formatCurrency(m.amount)}</td>
+                  <td className="num r">{formatMoney(m.amount, 'CAD', hideBalances)}</td>
                   <td className="num r muted">{m.count}</td>
                 </tr>
               ))}
@@ -132,9 +153,9 @@ export default function Dashboard() {
                 <XAxis dataKey="date" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                 <Tooltip
                   cursor={{ fill: 'var(--hover)' }}
-                  formatter={(v) => [formatCurrency(v), 'Spent']}
+                  formatter={(v) => [formatMoney(v, 'CAD', hideBalances), 'Spent']}
                 />
-                <Bar dataKey="amount" fill="var(--ink)" />
+                <Bar dataKey="amount" fill="var(--ink)" animationDuration={200} />
               </BarChart>
             </ResponsiveContainer>
           </div>

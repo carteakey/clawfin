@@ -21,7 +21,6 @@ class ChatBriefingRequest(BaseModel):
     period: str
     include_transactions: bool = False
     max_transactions: int = 25
-    redact_merchants: bool = False
 
 
 @router.post("")
@@ -51,8 +50,8 @@ async def chat_stream(req: ChatRequest, db: Session = Depends(get_db)):
 @router.post("/briefing")
 async def chat_briefing(req: ChatBriefingRequest, db: Session = Depends(get_db)):
     """Generate a UI-safe briefing through normal app auth."""
-    if req.period not in ("daily", "weekly"):
-        return {"error": "period must be 'daily' or 'weekly'", "summary": None}
+    if req.period not in ("weekly",):
+        return {"error": "period must be 'weekly'", "summary": None}
     if not provider.is_configured():
         return {"error": "AI provider not configured. Go to Settings to configure.", "summary": None}
 
@@ -61,7 +60,6 @@ async def chat_briefing(req: ChatBriefingRequest, db: Session = Depends(get_db))
         period=req.period,
         include_transactions=req.include_transactions,
         max_transactions=req.max_transactions,
-        redact_merchants=req.redact_merchants,
     )
 
     try:

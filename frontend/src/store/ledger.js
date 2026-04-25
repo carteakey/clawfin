@@ -14,6 +14,12 @@ export const useStore = create((set, get) => ({
     localStorage.setItem('clawfin_theme', t);
     set({ theme: t });
   },
+  hideBalances: localStorage.getItem('clawfin_hide_balances') === 'true',
+  toggleHideBalances: () => set((s) => {
+    const next = !s.hideBalances;
+    localStorage.setItem('clawfin_hide_balances', String(next));
+    return { hideBalances: next };
+  }),
 
   // Navigation
   currentView: 'dashboard',
@@ -29,6 +35,8 @@ export const useStore = create((set, get) => ({
   },
 
   // Transactions
+  selectedAccountId: '',
+  setSelectedAccountId: (id) => set({ selectedAccountId: id }),
   transactions: [],
   transactionsTotal: 0,
   transactionsLoading: false,
@@ -57,6 +65,7 @@ export const useStore = create((set, get) => ({
   chatOpen: false,
   chatMessages: [],
   chatLoading: false,
+  clearChat: () => set({ chatMessages: [] }),
   toggleChat: () => set((s) => ({ chatOpen: !s.chatOpen })),
   sendMessage: async (message) => {
     const messages = [...get().chatMessages, { role: 'user', content: message }];
@@ -78,15 +87,14 @@ export const useStore = create((set, get) => ({
     }
     set({ chatLoading: false });
   },
-  sendBriefing: async ({ period, redactMerchants = false }) => {
-    const label = `${period === 'weekly' ? 'Weekly' : 'Daily'}${redactMerchants ? ' private' : ''} transaction briefing`;
+  sendBriefing: async ({ period }) => {
+    const label = `${period === 'weekly' ? 'Weekly' : 'Daily'} transaction briefing`;
     const messages = [...get().chatMessages, { role: 'user', content: label }];
     set({ chatMessages: messages, chatLoading: true });
 
     try {
       const resp = await api.chatBriefing({
         period,
-        redact_merchants: redactMerchants,
         include_transactions: false,
       });
       const content = resp.summary || resp.error || 'No briefing generated';

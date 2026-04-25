@@ -30,33 +30,30 @@ PROVIDER_DEFAULTS = {
 }
 
 
-def _get_provider_config() -> dict:
+def _get_provider_config(db=None) -> dict:
     """Resolve the active provider: AppConfig overrides env."""
     provider = settings.AI_PROVIDER.lower()
     base_url = settings.AI_BASE_URL
     model = settings.AI_MODEL
+    api_key = settings.AI_API_KEY
 
     # AppConfig overrides (best-effort; fall back to env on any error)
     try:
-        from backend.db.database import SessionLocal
         from backend.db.models import AppConfig
-        with SessionLocal() as db:
-            override = {
-                row.key: row.value
-                for row in db.query(AppConfig).filter(
-                    AppConfig.key.in_([
-                        "ai_provider_override",
-                        "ai_base_url_override",
-                        "ai_model_override",
-                    ])
-                ).all()
-            }
-            if override.get("ai_provider_override"):
-                provider = override["ai_provider_override"].lower()
-            if override.get("ai_base_url_override"):
-                base_url = override["ai_base_url_override"]
-            if override.get("ai_model_override"):
-                model = override["ai_model_override"]
+        if db is None:
+            from backend.db.database import SessionLocal
+            with SessionLocal() as scoped_db:
+                override = _provider_overrides(scoped_db, AppConfig)
+        else:
+            override = _provider_overrides(db, AppConfig)
+        if override.get("ai_provider_override"):
+            provider = override["ai_provider_override"].lower()
+        if override.get("ai_base_url_override"):
+            base_url = override["ai_base_url_override"]
+        if override.get("ai_model_override"):
+            model = override["ai_model_override"]
+        if override.get("ai_api_key_override"):
+            api_key = override["ai_api_key_override"]
     except Exception:
         pass
 
@@ -68,8 +65,22 @@ def _get_provider_config() -> dict:
         "chat_path": defaults["chat_path"],
         "format": defaults["format"],
         "model": model,
-        "api_key": settings.AI_API_KEY,
+        "api_key": api_key,
         "provider": provider,
+    }
+
+
+def _provider_overrides(db, app_config_model) -> dict:
+    return {
+        row.key: row.value
+        for row in db.query(app_config_model).filter(
+            app_config_model.key.in_([
+                "ai_provider_override",
+                "ai_base_url_override",
+                "ai_model_override",
+                "ai_api_key_override",
+            ])
+        ).all()
     }
 
 

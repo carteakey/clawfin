@@ -170,6 +170,8 @@ function AIPanel() {
   };
   const setBaseUrl = (v) => saveFlags({ base_url: v });
   const setModel = (m) => saveFlags({ model: m });
+  const setApiKey = (v) => saveFlags({ api_key: v });
+  const clearApiKey = () => saveFlags({ clear_api_key: true });
   const toggleAI = (on) => saveFlags({ ai_categorization_enabled: on });
 
   const availableModels = health?.ok && Array.isArray(health.models) ? health.models : [];
@@ -234,6 +236,30 @@ function AIPanel() {
                   style={{ width: 280 }}
                   placeholder="model-id"
                 />
+              )}
+            </span>
+          }
+        />
+        <Row
+          label="API Key"
+          value={
+            <span className="flex gap-2 items-center" style={{ width: '100%' }}>
+              <input
+                type="password"
+                placeholder={flags?.has_api_key ? 'Stored — enter new key to replace' : 'API key'}
+                onBlur={(e) => {
+                  const next = e.target.value.trim();
+                  if (next) {
+                    setApiKey(next);
+                    e.target.value = '';
+                  }
+                }}
+                style={{ width: 320 }}
+              />
+              {flags?.has_api_key && (
+                <button type="button" className="btn btn-ghost" onClick={clearApiKey} disabled={saving}>
+                  Clear
+                </button>
               )}
             </span>
           }

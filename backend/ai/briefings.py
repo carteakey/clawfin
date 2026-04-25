@@ -3,12 +3,35 @@ from collections import defaultdict
 from datetime import date, timedelta
 import json
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from backend.ai import provider
 from backend.config import settings
-from backend.db.models import Account, Transaction
+from backend.db.models import Account, AccountType, Transaction
+
+INVESTMENT_ACCOUNT_TYPES = {
+    AccountType.TFSA,
+    AccountType.RRSP,
+    AccountType.FHSA,
+    AccountType.MARGIN,
+    AccountType.CRYPTO,
+}
+
+
+def _budget_transaction_query(db: Session):
+    from sqlalchemy import and_
+    return (
+        db.query(Transaction)
+        .outerjoin(Account, Transaction.account_id == Account.id)
+        .filter(or_(
+            Transaction.account_id.is_(None),
+            and_(
+                Account.account_type.notin_(INVESTMENT_ACCOUNT_TYPES),
+                Account.on_budget.is_(True)
+            )
+        ))
+    )
 
 
 BRIEFING_SYSTEM_PROMPT = """You write concise personal finance status briefings for ClawFin.
@@ -39,7 +62,6 @@ def build_transaction_briefing_context(
     end_date: date | None = None,
     include_transactions: bool = False,
     max_transactions: int = 25,
-    redact_merchants: bool = False,
 ) -> dict:
     """Build deterministic transaction context for an LLM or external automator."""
     start, end = resolve_period(period, end_date)
@@ -48,13 +70,13 @@ def build_transaction_briefing_context(
     prev_end = start - timedelta(days=1)
 
     txs = (
-        db.query(Transaction)
+        _budget_transaction_query(db)
         .filter(Transaction.date >= start, Transaction.date <= end)
         .order_by(Transaction.date.desc(), Transaction.id.desc())
         .all()
     )
     prev_txs = (
-        db.query(Transaction)
+        _budget_transaction_query(db)
         .filter(Transaction.date >= prev_start, Transaction.date <= prev_end)
         .all()
     )
@@ -72,7 +94,7 @@ def build_transaction_briefing_context(
         if tx.amount >= 0:
             continue
         category = tx.category or "Other"
-        merchant = _merchant_name(tx, redact_merchants)
+        merchant = _merchant_name(tx)
         amount = abs(tx.amount)
         category_totals[category]["amount"] += amount
         category_totals[category]["count"] += 1
@@ -82,9 +104,9 @@ def build_transaction_briefing_context(
 
     top_categories = _ranked_rows(category_totals, expenses, limit=8)
     top_merchants = _ranked_rows(merchant_totals, expenses, limit=8)
-    largest_transactions = _largest_transactions(txs, redact_merchants, limit=8)
+    largest_transactions = _largest_transactions(txs, limit=8)
     unusual_spending = _unusual_spending(category_totals, prev_txs, expenses)
-    recurring = _recurring_activity(db, start, end, redact_merchants)
+    recurring = _recurring_activity(db, start, end)
     account_freshness = _account_freshness(db, end)
 
     context = {
@@ -110,14 +132,13 @@ def build_transaction_briefing_context(
         "recurring_activity": recurring,
         "account_freshness": account_freshness,
         "privacy": {
-            "merchant_names_redacted": redact_merchants,
             "transactions_included": include_transactions,
         },
     }
 
     if include_transactions:
         context["transactions"] = [
-            _transaction_row(tx, redact_merchants)
+            _transaction_row(tx)
             for tx in txs[:max(0, min(max_transactions, 100))]
         ]
 
@@ -139,17 +160,15 @@ async def generate_transaction_briefing(context: dict) -> str:
     return (response.get("content") or "").strip()
 
 
-def _merchant_name(tx: Transaction, redact: bool) -> str:
-    if redact:
-        return "REDACTED"
+def _merchant_name(tx: Transaction) -> str:
     return tx.normalized_merchant or tx.merchant or "Unknown"
 
 
-def _transaction_row(tx: Transaction, redact: bool) -> dict:
+def _transaction_row(tx: Transaction) -> dict:
     return {
         "date": tx.date.isoformat(),
         "amount": round(tx.amount, 2),
-        "merchant": _merchant_name(tx, redact),
+        "merchant": _merchant_name(tx),
         "category": tx.category or "Other",
         "currency": tx.currency,
         "pending": bool(tx.pending),
@@ -169,10 +188,10 @@ def _ranked_rows(groups: dict[str, dict], total: float, limit: int) -> list[dict
     return sorted(rows, key=lambda row: row["amount"], reverse=True)[:limit]
 
 
-def _largest_transactions(txs: list[Transaction], redact: bool, limit: int) -> list[dict]:
+def _largest_transactions(txs: list[Transaction], limit: int) -> list[dict]:
     outflows = [tx for tx in txs if tx.amount < 0]
     outflows.sort(key=lambda tx: abs(tx.amount), reverse=True)
-    return [_transaction_row(tx, redact) for tx in outflows[:limit]]
+    return [_transaction_row(tx) for tx in outflows[:limit]]
 
 
 def _unusual_spending(current_categories: dict[str, dict], prev_txs: list[Transaction], total: float) -> list[dict]:
@@ -197,10 +216,10 @@ def _unusual_spending(current_categories: dict[str, dict], prev_txs: list[Transa
     return sorted(rows, key=lambda row: row["amount"], reverse=True)[:5]
 
 
-def _recurring_activity(db: Session, start: date, end: date, redact: bool) -> dict:
+def _recurring_activity(db: Session, start: date, end: date) -> dict:
     lookback = end - timedelta(days=180)
     txs = (
-        db.query(Transaction)
+        _budget_transaction_query(db)
         .filter(Transaction.date >= lookback, Transaction.date <= end, Transaction.amount < 0)
         .all()
     )

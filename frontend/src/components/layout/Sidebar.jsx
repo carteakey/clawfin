@@ -1,12 +1,15 @@
 import { useStore } from '../../store/ledger';
 
-const NAV_ITEMS = [
+const PRIMARY_NAV = [
   { id: 'dashboard',    label: 'Dashboard' },
   { id: 'accounts',     label: 'Accounts' },
-  { id: 'holdings',     label: 'Holdings' },
   { id: 'transactions', label: 'Transactions' },
   { id: 'recurring',    label: 'Recurring' },
   { id: 'planning',     label: 'Planning' },
+];
+
+const UTILITY_NAV = [
+  { id: 'holdings',     label: 'Holdings' },
   { id: 'import',       label: 'Import' },
   { id: 'settings',     label: 'Settings' },
 ];
@@ -22,7 +25,21 @@ export default function Sidebar() {
 
       <nav>
         <div className="nav-label">Nav</div>
-        {NAV_ITEMS.map(({ id, label }) => (
+        {PRIMARY_NAV.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            className={`nav-item ${currentView === id ? 'active' : ''}`}
+            onClick={() => setView(id)}
+          >
+            {label}
+          </button>
+        ))}
+
+        <div className="nav-divider" />
+
+        <div className="nav-label">Tools</div>
+        {UTILITY_NAV.map(({ id, label }) => (
           <button
             key={id}
             type="button"

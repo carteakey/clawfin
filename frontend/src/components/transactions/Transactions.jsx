@@ -104,7 +104,10 @@ export default function Transactions() {
           <button
             type="button"
             className={`chip ${!accountId ? 'active' : ''}`}
-            onClick={() => setAccountId('')}
+            onClick={() => {
+              setAccountId('');
+              setSelectedAccountId('');
+            }}
           >
             All <span className="count">{transactionsTotal}</span>
           </button>

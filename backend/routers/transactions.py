@@ -143,10 +143,43 @@ def list_accounts_for_filter(db: Session = Depends(get_db)):
                 "last_sync_error": a.last_sync_error,
                 "simplefin_account_present": bool(a.simplefin_account_present),
                 "stale_reason": a.stale_reason,
+                "on_budget": bool(a.on_budget),
+                "source": a.source.value if a.source else None,
             }
             for a in accounts
         ]
     }
+
+
+from fastapi import HTTPException
+
+class AccountUpdate(BaseModel):
+    on_budget: bool | None = None
+
+@router.patch("/accounts/{account_id}")
+def update_account(account_id: int, update: AccountUpdate, db: Session = Depends(get_db)):
+    account = db.query(Account).filter(Account.id == account_id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    if update.on_budget is not None:
+        account.on_budget = update.on_budget
+
+    db.commit()
+    return {"status": "updated", "id": account_id}
+
+@router.delete("/accounts/{account_id}")
+def delete_account(account_id: int, db: Session = Depends(get_db)):
+    from backend.db.models import Holding
+    account = db.query(Account).filter(Account.id == account_id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    db.query(Transaction).filter(Transaction.account_id == account_id).delete()
+    db.query(Holding).filter(Holding.account_id == account_id).delete()
+    db.delete(account)
+    db.commit()
+    return {"status": "deleted"}
 
 
 @router.get("/recurring")

@@ -3,8 +3,9 @@ import { formatCurrency } from '../../utils/format';
 /*
  * Brutalist cash-flow waterfall. Horizontal bars anchored at a shared scale.
  * Income in pos, each expense category in neg, net at bottom.
+ * categoryColors: { [categoryName]: hexColor } — passed from Dashboard.
  */
-export default function Waterfall({ income, breakdown }) {
+export default function Waterfall({ income, breakdown, categoryColors = {} }) {
   if (!income && (!breakdown || breakdown.length === 0)) return null;
 
   const expenses = (breakdown || []).slice(0, 10);
@@ -21,6 +22,7 @@ export default function Waterfall({ income, breakdown }) {
         amount={income}
         pct={pct(income)}
         side="pos"
+        barColor="var(--pos)"
       />
       {expenses.map((c) => (
         <Row
@@ -29,6 +31,7 @@ export default function Waterfall({ income, breakdown }) {
           amount={-c.amount}
           pct={pct(c.amount)}
           side="neg"
+          barColor={categoryColors[c.category] || 'var(--neg)'}
           muted
         />
       ))}
@@ -37,14 +40,15 @@ export default function Waterfall({ income, breakdown }) {
         amount={net}
         pct={pct(net)}
         side={net >= 0 ? 'pos' : 'neg'}
+        barColor={net >= 0 ? 'var(--pos)' : 'var(--neg)'}
         emphasis
       />
     </div>
   );
 }
 
-function Row({ label, amount, pct, side, muted, emphasis }) {
-  const color = side === 'pos' ? 'var(--pos)' : 'var(--neg)';
+function Row({ label, amount, pct, side, barColor, muted, emphasis }) {
+  const textColor = side === 'pos' ? 'var(--pos)' : 'var(--neg)';
   return (
     <div
       style={{
@@ -85,7 +89,8 @@ function Row({ label, amount, pct, side, muted, emphasis }) {
             top: 0,
             bottom: 0,
             width: pct,
-            background: color,
+            background: barColor,
+            opacity: (muted && !emphasis) ? 0.75 : 1,
             [side === 'pos' ? 'left' : 'right']: 0,
           }}
         />
@@ -94,7 +99,7 @@ function Row({ label, amount, pct, side, muted, emphasis }) {
         className="num"
         style={{
           textAlign: 'right',
-          color,
+          color: textColor,
           fontWeight: emphasis ? 700 : 400,
           fontSize: emphasis ? 13 : 12,
         }}

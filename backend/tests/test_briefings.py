@@ -83,7 +83,7 @@ def test_daily_context_briefing_returns_metrics(client, db):
     assert context["account_freshness"]["reconnect_nudge"] is False
 
 
-def test_weekly_context_can_redact_and_include_transactions(client, db):
+def test_weekly_context_can_include_transactions(client, db):
     account = _add_account(db)
     _add_tx(db, date(2026, 4, 20), -100.00, "Costco", "Groceries", account.id)
     _add_tx(db, date(2026, 4, 19), -30.00, "Netflix", "Subscriptions", account.id)
@@ -97,16 +97,15 @@ def test_weekly_context_can_redact_and_include_transactions(client, db):
             "mode": "context",
             "end_date": "2026-04-25",
             "include_transactions": True,
-            "redact_merchants": True,
         },
     )
 
     assert response.status_code == 200
     context = response.json()["context"]
     assert context["range"]["start"] == "2026-04-19"
-    assert context["top_merchants"][0]["name"] == "REDACTED"
-    assert context["transactions"][0]["merchant"] == "REDACTED"
-    assert context["privacy"]["merchant_names_redacted"] is True
+    assert context["top_merchants"][0]["name"] == "Costco"
+    assert context["transactions"][0]["merchant"] == "Costco"
+    assert context["privacy"]["transactions_included"] is True
 
 
 def test_generate_briefing_calls_ai_provider(client, db, monkeypatch):
@@ -118,19 +117,19 @@ def test_generate_briefing_calls_ai_provider(client, db, monkeypatch):
         assert tools is None
         assert temperature == 0.2
         assert "Loblaws" in messages[1]["content"]
-        return {"content": "Daily status: spent CAD 42.50 on groceries.", "tool_calls": None}
+        return {"content": "Weekly status: spent CAD 42.50 on groceries.", "tool_calls": None}
 
     monkeypatch.setattr("backend.ai.briefings.provider.chat_completion", fake_chat_completion)
 
     response = client.post(
         "/api/briefings/transactions",
         headers={"X-ClawFin-Automation-Token": "test-token"},
-        json={"period": "daily", "mode": "generate", "end_date": "2026-04-25"},
+        json={"period": "weekly", "mode": "generate", "end_date": "2026-04-25"},
     )
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["summary"] == "Daily status: spent CAD 42.50 on groceries."
+    assert payload["summary"] == "Weekly status: spent CAD 42.50 on groceries."
 
 
 def test_chat_briefing_uses_user_safe_endpoint(client, db, monkeypatch):
@@ -143,16 +142,17 @@ def test_chat_briefing_uses_user_safe_endpoint(client, db, monkeypatch):
 
     async def fake_chat_completion(messages, tools=None, temperature=0.3):
         assert "Loblaws" in messages[1]["content"]
-        return {"content": "Daily status from chat briefing.", "tool_calls": None}
+        return {"content": "Weekly status from chat briefing.", "tool_calls": None}
 
     monkeypatch.setattr("backend.ai.briefings.provider.chat_completion", fake_chat_completion)
 
     response = client.post(
         "/api/chat/briefing",
-        json={"period": "daily"},
+        json={"period": "weekly"},
     )
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["summary"] == "Daily status from chat briefing."
-    assert payload["context"]["period"] == "daily"
+    assert payload["summary"] == "Weekly status from chat briefing."
+    assert payload["context"]["period"] == "weekly"
+

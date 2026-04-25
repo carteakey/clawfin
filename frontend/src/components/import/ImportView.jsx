@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { api } from '../../api/client';
 
 const TABS = [
@@ -13,6 +13,17 @@ export default function ImportView() {
   const [tab, setTab] = useState('csv');
   const [dragging, setDragging] = useState(false);
   const [sfToken, setSfToken] = useState('');
+  const [sfStatus, setSfStatus] = useState(null);
+  const [sfAccounts, setSfAccounts] = useState(null);
+
+  useEffect(() => {
+    if (tab === 'simplefin') {
+      api.simpleFinStatus().then(setSfStatus).catch(console.error);
+      api.getAccounts().then(d => {
+        setSfAccounts((d.accounts || []).filter(a => a.source === 'simplefin'));
+      }).catch(console.error);
+    }
+  }, [tab, result]);
 
   const handleFile = useCallback(async (file) => {
     setImporting(true);
@@ -90,22 +101,64 @@ export default function ImportView() {
       )}
 
       {tab === 'simplefin' && (
-        <div className="block" style={{ maxWidth: 560 }}>
-          <div className="block-title">Connect SimpleFin</div>
-          <p className="muted mb-3" style={{ fontSize: 12 }}>
-            Setup token from{' '}
-            <a href="https://app.simplefin.org" target="_blank" rel="noreferrer">app.simplefin.org</a>
-          </p>
-          <input
-            placeholder="PASTE SETUP TOKEN"
-            value={sfToken}
-            onChange={(e) => setSfToken(e.target.value)}
-            style={{ marginBottom: 'var(--sp-3)' }}
-          />
-          <div className="flex gap-2">
-            <button type="button" className="btn btn-primary" onClick={handleSimpleFin} disabled={importing}>Connect</button>
-            <button type="button" className="btn btn-ghost" onClick={handleSync} disabled={importing}>Sync Now</button>
+        <div className="flex flex-col gap-4">
+          <div className="block" style={{ maxWidth: 560 }}>
+            <div className="block-title">{sfStatus?.is_configured ? 'SimpleFin Connected' : 'Connect SimpleFin'}</div>
+            {!sfStatus?.is_configured && (
+              <p className="muted mb-3" style={{ fontSize: 12 }}>
+                Setup token from{' '}
+                <a href="https://app.simplefin.org" target="_blank" rel="noreferrer">app.simplefin.org</a>
+              </p>
+            )}
+            <input
+              placeholder={sfStatus?.is_configured ? "PASTE NEW SETUP TOKEN TO OVERRIDE" : "PASTE SETUP TOKEN"}
+              value={sfToken}
+              onChange={(e) => setSfToken(e.target.value)}
+              style={{ marginBottom: 'var(--sp-3)' }}
+            />
+            <div className="flex gap-2">
+              <button type="button" className={`btn ${sfStatus?.is_configured ? 'btn-ghost' : 'btn-primary'}`} onClick={handleSimpleFin} disabled={importing || !sfToken.trim()}>
+                {sfStatus?.is_configured ? 'Reconnect' : 'Connect'}
+              </button>
+              {sfStatus?.is_configured && (
+                <button type="button" className="btn btn-primary" onClick={handleSync} disabled={importing}>Sync Now</button>
+              )}
+            </div>
           </div>
+          
+          {sfAccounts && sfAccounts.length > 0 && (
+            <div className="block" style={{ maxWidth: 560 }}>
+              <div className="block-title">Imported Accounts</div>
+              <table className="dense">
+                <thead>
+                  <tr>
+                    <th>Institution</th>
+                    <th>Account</th>
+                    <th style={{ width: 150 }}>Last Sync</th>
+                    <th style={{ width: 80 }} className="r">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sfAccounts.map(a => (
+                    <tr key={a.id}>
+                      <td>{a.institution}</td>
+                      <td>{a.name}</td>
+                      <td className="muted num" style={{ fontSize: 11 }}>
+                        {a.last_sync_at ? new Date(a.last_sync_at + 'Z').toLocaleString() : 'Never'}
+                      </td>
+                      <td className="r">
+                        {a.stale_reason || a.last_sync_error ? (
+                          <span className="neg" title={a.stale_reason || a.last_sync_error}>Error</span>
+                        ) : (
+                          <span className="pos">OK</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

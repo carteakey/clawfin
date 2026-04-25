@@ -7,6 +7,10 @@ export function formatCurrency(amount, currency = 'CAD') {
   }).format(amount);
 }
 
+export function formatMoney(amount, currency = 'CAD', hidden = false) {
+  return hidden ? '••••••' : formatCurrency(amount, currency);
+}
+
 export function formatDelta(pct) {
   const sign = pct >= 0 ? '▲' : '▼';
   return `${sign} ${Math.abs(pct).toFixed(1)}%`;

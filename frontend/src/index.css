@@ -235,6 +235,12 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   background: var(--accent-tint);
 }
 
+.nav-divider {
+  height: 1px;
+  background: var(--rule);
+  margin: var(--sp-3) var(--sp-4);
+}
+
 /* ── Blocks (flat "cards") ───────────────────────────────────────── */
 .block {
   border: 1px solid var(--ink);
@@ -256,7 +262,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 
 .section {
-  margin-bottom: var(--sp-6);
+  margin-bottom: var(--sp-4);
 }
 
 .section-head {
@@ -274,7 +280,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   position: absolute;
   left: 0;
   bottom: -2px;
-  width: 40px;
+  width: min(40px, 20%);
   height: 2px;
   background: var(--accent);
 }

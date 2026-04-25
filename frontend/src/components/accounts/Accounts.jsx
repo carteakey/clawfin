@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api/client';
-import { formatCurrency } from '../../utils/format';
+import { useStore } from '../../store/ledger';
+import { formatMoney } from '../../utils/format';
 
 const TYPE_LABELS = {
   chequing: 'CHEQUING',
@@ -14,9 +15,30 @@ const TYPE_LABELS = {
   other: 'OTHER',
 };
 
+function syncStatus(acct) {
+  // CSV / manual sources don't have live sync
+  if (!acct.source || acct.source === 'manual' || !acct.source.startsWith('simplefin')) {
+    return { color: 'var(--ink-3)', label: 'Static — no live sync', symbol: '○' };
+  }
+  if (!acct.simplefin_account_present) {
+    return { color: 'var(--neg)', label: 'Account missing from SimpleFIN', symbol: '●' };
+  }
+  if (acct.last_sync_error) {
+    return { color: 'var(--neg)', label: `Sync error: ${acct.last_sync_error}`, symbol: '●' };
+  }
+  if (acct.stale_reason) {
+    return { color: '#F59E0B', label: `Stale: ${acct.stale_reason}`, symbol: '●' };
+  }
+  if (acct.last_sync_at) {
+    return { color: 'var(--pos)', label: 'Synced', symbol: '●' };
+  }
+  return { color: 'var(--ink-3)', label: 'Never synced', symbol: '○' };
+}
+
 export default function Accounts() {
   const [accounts, setAccounts] = useState(null);
   const [error, setError] = useState(null);
+  const hideBalances = useStore((s) => s.hideBalances);
 
   const load = () => {
     api.getAccounts()
@@ -25,6 +47,25 @@ export default function Accounts() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const toggleBudget = async (id, currentVal) => {
+    try {
+      await api.updateAccount(id, { on_budget: !currentVal });
+      load();
+    } catch (e) {
+      alert(`Error updating account: ${e.message}`);
+    }
+  };
+
+  const deleteAccount = async (id) => {
+    if (!window.confirm('Delete this account and all its transactions? This cannot be undone.')) return;
+    try {
+      await api.deleteAccount(id);
+      load();
+    } catch (e) {
+      alert(`Error deleting account: ${e.message}`);
+    }
+  };
 
   const { byInstitution, totals } = useMemo(() => {
     const list = accounts || [];
@@ -69,16 +110,16 @@ export default function Accounts() {
     <>
       <div className="hero-stat">
         <div className="l">Total Balance</div>
-        <div className="v">{formatCurrency(totals.total)}</div>
+        <div className="v">{formatMoney(totals.total, 'CAD', hideBalances)}</div>
         <div className="d muted">
           {accounts.length} accounts · {Object.keys(byInstitution).length} institutions
         </div>
       </div>
 
       <div className="kpi-row">
-        <Kpi label="Cash" value={formatCurrency(totals.cash)} />
-        <Kpi label="Credit" value={formatCurrency(totals.credit)} />
-        <Kpi label="Registered" value={formatCurrency(totals.registered)} />
+        <Kpi label="Cash" value={formatMoney(totals.cash, 'CAD', hideBalances)} />
+        <Kpi label="Credit" value={formatMoney(totals.credit, 'CAD', hideBalances)} />
+        <Kpi label="Registered" value={formatMoney(totals.registered, 'CAD', hideBalances)} />
         <Kpi label="Accounts" value={accounts.length} />
       </div>
 
@@ -92,31 +133,79 @@ export default function Accounts() {
             <table className="dense">
               <thead>
                 <tr>
+                  <th style={{ width: 24 }} />
                   <th>Account</th>
                   <th style={{ width: 140 }}>Type</th>
                   <th className="r" style={{ width: 160 }}>Balance</th>
                   <th className="r" style={{ width: 160 }}>Available</th>
                   <th style={{ width: 60 }}>Ccy</th>
+                  <th style={{ width: 100, textAlign: 'center' }}>Budget</th>
+                  <th style={{ width: 80, textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((a) => (
+                {items.map((a) => {
+                  const sync = syncStatus(a);
+                  return (
                   <tr key={a.id}>
-                    <td>{a.name}</td>
+                    <td style={{ width: 24, textAlign: 'center', paddingRight: 0 }}>
+                      <span
+                        title={sync.label}
+                        style={{
+                          color: sync.color,
+                          fontSize: 9,
+                          lineHeight: 1,
+                          cursor: 'default',
+                          fontFamily: 'var(--font-mono)',
+                        }}
+                      >
+                        {sync.symbol}
+                      </span>
+                    </td>
+                    <td
+                      style={{ cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: '3px' }}
+                      onClick={() => {
+                        useStore.getState().setSelectedAccountId(String(a.id));
+                        useStore.getState().setView('transactions');
+                      }}
+                    >
+                      {a.name}
+                    </td>
                     <td className="muted num" style={{ fontSize: 10, letterSpacing: '0.1em' }}>
                       {TYPE_LABELS[a.account_type] || (a.account_type || '').toUpperCase()}
                     </td>
                     <td className={`num r ${a.balance >= 0 ? '' : 'neg'}`}>
-                      {formatCurrency(a.balance, a.currency)}
+                      {formatMoney(a.balance, a.currency, hideBalances)}
                     </td>
                     <td className="num r muted">
                       {a.available_balance !== null && a.available_balance !== undefined
-                        ? formatCurrency(a.available_balance, a.currency)
+                        ? formatMoney(a.available_balance, a.currency, hideBalances)
                         : '—'}
                     </td>
                     <td className="num muted">{a.currency}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        style={{ fontSize: 10, padding: '2px 8px' }}
+                        onClick={() => toggleBudget(a.id, a.on_budget)}
+                      >
+                        {a.on_budget ? 'ON' : 'OFF'}
+                      </button>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost neg"
+                        style={{ fontSize: 10, padding: '2px 8px' }}
+                        onClick={() => deleteAccount(a.id)}
+                      >
+                        Del
+                      </button>
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

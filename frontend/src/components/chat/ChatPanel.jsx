@@ -43,34 +43,25 @@ export default function ChatPanel() {
           <div className="ch-title">Chat</div>
           {modelLabel && <div className="ch-model">{modelLabel}</div>}
         </div>
-        <button type="button" className="btn btn-ghost" onClick={toggleChat} style={{ padding: '2px 8px' }}>×</button>
+        <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+          {chatMessages.length > 0 && (
+            <button type="button" className="btn btn-ghost" onClick={clearChat} style={{ padding: '2px 8px', fontSize: 10 }}>CLEAR</button>
+          )}
+          <button type="button" className="btn btn-ghost" onClick={toggleChat} style={{ padding: '2px 8px' }}>×</button>
+        </div>
       </div>
 
       <div className="chat-messages">
         {chatMessages.length === 0 && (
           <div style={{ padding: 'var(--sp-5) 0' }}>
             <div className="label mb-3">Ask Your Ledger</div>
-            <div className="chat-presets">
-              <button
-                type="button"
-                onClick={() => runPreset({ period: 'daily' })}
-                disabled={chatLoading}
-              >
-                Daily Brief
-              </button>
+            <div className="chat-presets" style={{ gridTemplateColumns: '1fr' }}>
               <button
                 type="button"
                 onClick={() => runPreset({ period: 'weekly' })}
                 disabled={chatLoading}
               >
                 Weekly Brief
-              </button>
-              <button
-                type="button"
-                onClick={() => runPreset({ period: 'daily', redactMerchants: true })}
-                disabled={chatLoading}
-              >
-                Private Daily
               </button>
             </div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: 1.7, color: 'var(--ink-2)' }}>

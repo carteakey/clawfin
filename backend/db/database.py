@@ -57,6 +57,7 @@ def _apply_column_migrations():
         ("accounts", "last_sync_error",   "TEXT"),
         ("accounts", "simplefin_account_present", "BOOLEAN NOT NULL DEFAULT 1"),
         ("accounts", "stale_reason",      "VARCHAR(100)"),
+        ("accounts", "on_budget",         "BOOLEAN NOT NULL DEFAULT 1"),
         ("transactions", "memo",          "TEXT"),
         ("transactions", "pending",       "BOOLEAN NOT NULL DEFAULT 0"),
     ]

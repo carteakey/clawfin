@@ -115,6 +115,8 @@ class AIFlagsUpdate(BaseModel):
     provider: str | None = None
     base_url: str | None = None
     model: str | None = None
+    api_key: str | None = None
+    clear_api_key: bool | None = None
 
 
 def _set_override(db: Session, key: str, value: str | None):
@@ -132,12 +134,13 @@ def _set_override(db: Session, key: str, value: str | None):
 @router.get("/ai/flags")
 def get_ai_flags(db: Session = Depends(get_db)):
     from backend.ai.provider import _get_provider_config
-    cfg = _get_provider_config()
+    cfg = _get_provider_config(db)
     return {
         "ai_categorization_enabled": _get_flag(db, "ai_categorization_enabled", False),
         "provider": cfg["provider"],
         "base_url": cfg["base_url"],
         "model": cfg["model"],
+        "has_api_key": bool(cfg["api_key"]),
     }
 
 
@@ -153,6 +156,10 @@ def update_ai_flags(req: AIFlagsUpdate, db: Session = Depends(get_db)):
         _set_override(db, "ai_base_url_override", req.base_url)
     if req.model is not None:
         _set_override(db, "ai_model_override", req.model)
+    if req.clear_api_key:
+        _set_override(db, "ai_api_key_override", None)
+    elif req.api_key is not None:
+        _set_override(db, "ai_api_key_override", req.api_key)
     db.commit()
     return {"status": "updated"}
 

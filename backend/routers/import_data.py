@@ -149,6 +149,11 @@ async def simplefin_setup(req: SimpleFinSetup):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"SimpleFin setup failed: {str(e)}")
 
+@router.get("/simplefin/status")
+async def simplefin_status():
+    return {
+        "is_configured": bool(settings.SIMPLEFIN_ACCESS_URL)
+    }
 
 @router.post("/simplefin/sync")
 async def simplefin_sync(db: Session = Depends(get_db)):

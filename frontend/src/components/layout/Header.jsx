@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../../store/ledger';
 import { api } from '../../api/client';
-import { formatCurrency } from '../../utils/format';
+import { formatMoney } from '../../utils/format';
 import Sparkline from './Sparkline';
 
 const TITLES = {
@@ -16,7 +16,7 @@ const TITLES = {
 };
 
 export default function Header() {
-  const { currentView, theme, setTheme, dashboard, fetchDashboard } = useStore();
+  const { currentView, theme, setTheme, dashboard, fetchDashboard, hideBalances, toggleHideBalances } = useStore();
   const [sparkPoints, setSparkPoints] = useState([]);
 
   useEffect(() => {
@@ -47,7 +47,7 @@ export default function Header() {
         {netWorth !== null && (
           <div className="hdr-stat">
             <span className="l">Net</span>
-            <span className="num">{formatCurrency(netWorth)}</span>
+            <span className="num">{formatMoney(netWorth, 'CAD', hideBalances)}</span>
             {sparkPoints.length >= 2 && (
               <Sparkline
                 points={sparkPoints}
@@ -68,6 +68,9 @@ export default function Header() {
         )}
 
         <div className="theme-toggle" role="group" aria-label="Theme">
+          <button type="button" className={hideBalances ? 'active' : ''} onClick={toggleHideBalances}>
+            {hideBalances ? 'Show $' : 'Hide $'}
+          </button>
           <button type="button" className={theme === 'dark' ? 'active' : ''} onClick={() => setTheme('dark')}>Dark</button>
           <button type="button" className={theme === 'light' ? 'active' : ''} onClick={() => setTheme('light')}>Light</button>
         </div>

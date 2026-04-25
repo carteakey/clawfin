@@ -50,6 +50,7 @@ class Account(Base):
     last_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     simplefin_account_present: Mapped[bool] = mapped_column(Boolean, default=True)
     stale_reason: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    on_budget: Mapped[bool] = mapped_column(Boolean, default=True)
     source: Mapped[DataSource] = mapped_column(SAEnum(DataSource))
     external_id: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

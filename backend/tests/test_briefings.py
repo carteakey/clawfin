@@ -131,3 +131,28 @@ def test_generate_briefing_calls_ai_provider(client, db, monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert payload["summary"] == "Daily status: spent CAD 42.50 on groceries."
+
+
+def test_chat_briefing_uses_user_safe_endpoint(client, db, monkeypatch):
+    from backend.config import settings
+
+    monkeypatch.setattr(settings, "PASSWORD", "")
+    account = _add_account(db)
+    _add_tx(db, date(2026, 4, 25), -42.50, "Loblaws", "Groceries", account.id)
+    db.commit()
+
+    async def fake_chat_completion(messages, tools=None, temperature=0.3):
+        assert "Loblaws" in messages[1]["content"]
+        return {"content": "Daily status from chat briefing.", "tool_calls": None}
+
+    monkeypatch.setattr("backend.ai.briefings.provider.chat_completion", fake_chat_completion)
+
+    response = client.post(
+        "/api/chat/briefing",
+        json={"period": "daily"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["summary"] == "Daily status from chat briefing."
+    assert payload["context"]["period"] == "daily"

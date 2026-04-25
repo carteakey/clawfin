@@ -78,6 +78,24 @@ export const useStore = create((set, get) => ({
     }
     set({ chatLoading: false });
   },
+  sendBriefing: async ({ period, redactMerchants = false }) => {
+    const label = `${period === 'weekly' ? 'Weekly' : 'Daily'}${redactMerchants ? ' private' : ''} transaction briefing`;
+    const messages = [...get().chatMessages, { role: 'user', content: label }];
+    set({ chatMessages: messages, chatLoading: true });
+
+    try {
+      const resp = await api.chatBriefing({
+        period,
+        redact_merchants: redactMerchants,
+        include_transactions: false,
+      });
+      const content = resp.summary || resp.error || 'No briefing generated';
+      set({ chatMessages: [...messages, { role: 'assistant', content }] });
+    } catch (e) {
+      set({ chatMessages: [...messages, { role: 'assistant', content: `Error: ${e.message}` }] });
+    }
+    set({ chatLoading: false });
+  },
 
   // Import
   importResult: null,

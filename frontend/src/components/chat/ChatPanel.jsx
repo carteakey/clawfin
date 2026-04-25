@@ -3,7 +3,7 @@ import { useStore } from '../../store/ledger';
 import { api } from '../../api/client';
 
 export default function ChatPanel() {
-  const { chatOpen, chatMessages, chatLoading, toggleChat, sendMessage } = useStore();
+  const { chatOpen, chatMessages, chatLoading, toggleChat, sendMessage, sendBriefing } = useStore();
   const [input, setInput] = useState('');
   const [aiConfig, setAiConfig] = useState(null);
   const messagesEnd = useRef(null);
@@ -27,9 +27,9 @@ export default function ChatPanel() {
     setInput('');
   };
 
-  const runPreset = (message) => {
+  const runPreset = (briefing) => {
     if (chatLoading) return;
-    sendMessage(message);
+    sendBriefing(briefing);
   };
 
   const modelLabel = aiConfig
@@ -53,21 +53,21 @@ export default function ChatPanel() {
             <div className="chat-presets">
               <button
                 type="button"
-                onClick={() => runPreset('Generate my daily transaction briefing. Use the briefing context tool with period daily. Keep it concise, notification-friendly, and include any stale SimpleFIN account reconnect nudges.')}
+                onClick={() => runPreset({ period: 'daily' })}
                 disabled={chatLoading}
               >
                 Daily Brief
               </button>
               <button
                 type="button"
-                onClick={() => runPreset('Generate my weekly transaction briefing. Use the briefing context tool with period weekly. Keep it concise, notification-friendly, and include unusual spending, recurring activity, and stale SimpleFIN account reconnect nudges.')}
+                onClick={() => runPreset({ period: 'weekly' })}
                 disabled={chatLoading}
               >
                 Weekly Brief
               </button>
               <button
                 type="button"
-                onClick={() => runPreset('Generate a privacy-minimized daily transaction briefing. Use the briefing context tool with period daily and redact merchant names. Keep it concise and notification-friendly.')}
+                onClick={() => runPreset({ period: 'daily', redactMerchants: true })}
                 disabled={chatLoading}
               >
                 Private Daily

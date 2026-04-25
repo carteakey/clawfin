@@ -81,6 +81,7 @@ export const api = {
 
   // Chat
   chat: (message, history = []) => request('/chat', { method: 'POST', body: JSON.stringify({ message, history }) }),
+  chatBriefing: (data) => request('/chat/briefing', { method: 'POST', body: JSON.stringify(data) }),
   chatStream: async function* (message, history = []) {
     const headers = { 'Content-Type': 'application/json' };
     if (authToken) headers['Authorization'] = `Bearer ${authToken}`;

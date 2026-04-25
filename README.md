@@ -57,26 +57,27 @@ CLAWFIN_SECRET_KEY=<openssl-rand-hex-32>
 CLAWFIN_AUTOMATION_TOKEN=<openssl-rand-hex-32>
 CLAWFIN_AI_PROVIDER=ollama
 CLAWFIN_AI_MODEL=llama3.1
-CLAWFIN_AI_BASE_URL=http://localhost:11434
+CLAWFIN_AI_BASE_URL=http://ollama:11434
 CLAWFIN_SIMPLEFIN_STALE_DAYS=3
 ```
 
-Run the app locally:
+Run the app with Docker Compose:
 
 ```bash
-# Terminal 1
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install -r backend/requirements.txt
-uvicorn backend.main:app --reload
+# Backend + frontend
+docker compose up -d
 
-# Terminal 2
-cd frontend
-npm install
-npm run dev
+# Backend + frontend + local Ollama
+docker compose --profile ai-local up -d
 ```
 
-Open the Vite URL, usually `http://localhost:5173`, and log in with `CLAWFIN_PASSWORD`.
+Open `http://localhost:3000` and log in with `CLAWFIN_PASSWORD`.
+
+If you run Ollama outside Docker instead, set:
+
+```bash
+CLAWFIN_AI_BASE_URL=http://host.docker.internal:11434
+```
 
 To test AI briefings in the UI:
 
@@ -92,6 +93,8 @@ curl -X POST http://localhost:8000/api/briefings/transactions \
   -H "X-ClawFin-Automation-Token: $CLAWFIN_AUTOMATION_TOKEN" \
   -d '{"period":"daily","mode":"context","include_transactions":true}'
 ```
+
+For local source development instead of Docker, use the commands in [Local Development](#%EF%B8%8F-local-development).
 
 Run verification before opening a PR:
 

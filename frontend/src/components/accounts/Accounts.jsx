@@ -38,6 +38,8 @@ function syncStatus(acct) {
 export default function Accounts() {
   const [accounts, setAccounts] = useState(null);
   const [error, setError] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newAcct, setNewAcct] = useState({ name: '', institution: '', account_type: 'chequing', currency: 'CAD', on_budget: true });
   const hideBalances = useStore((s) => s.hideBalances);
 
   const load = () => {
@@ -47,6 +49,18 @@ export default function Accounts() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const handleAddAccount = async (e) => {
+    e.preventDefault();
+    try {
+      await api.createAccount(newAcct);
+      setShowAdd(false);
+      setNewAcct({ name: '', institution: '', account_type: 'chequing', currency: 'CAD', on_budget: true });
+      load();
+    } catch (e) {
+      alert(`Error creating account: ${e.message}`);
+    }
+  };
 
   const toggleBudget = async (id, currentVal) => {
     try {
@@ -97,12 +111,13 @@ export default function Accounts() {
   );
 
   if (accounts === null) return <div className="loading label">Loading…</div>;
-  if (accounts.length === 0) return (
+  if (accounts.length === 0 && !showAdd) return (
     <div style={{ padding: 'var(--sp-8) 0', textAlign: 'center' }}>
       <div className="label mb-3">No Accounts</div>
       <h2 style={{ fontFamily: 'var(--font-mono)', fontSize: 24, fontWeight: 700, marginBottom: 'var(--sp-4)' }}>
         Connect a bank or import a CSV.
       </h2>
+      <button type="button" className="btn btn-primary" onClick={() => setShowAdd(true)}>+ ADD MANUAL ACCOUNT</button>
     </div>
   );
 
@@ -113,8 +128,64 @@ export default function Accounts() {
         <div className="v">{formatMoney(totals.total, 'CAD', hideBalances)}</div>
         <div className="d muted">
           {accounts.length} accounts · {Object.keys(byInstitution).length} institutions
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ marginLeft: 'var(--sp-4)', fontSize: 10 }}
+            onClick={() => setShowAdd(!showAdd)}
+          >
+            {showAdd ? 'CANCEL' : '+ ADD MANUAL ACCOUNT'}
+          </button>
         </div>
       </div>
+
+      {showAdd && (
+        <div className="block mb-6" style={{ maxWidth: 600 }}>
+          <div className="block-title">Create Manual Account</div>
+          <form onSubmit={handleAddAccount} className="grid-2" style={{ border: 'none', padding: 0 }}>
+            <div style={{ border: 'none', padding: '0 var(--sp-4) var(--sp-4) 0' }}>
+              <div className="label mb-2">Account Name</div>
+              <input
+                required
+                placeholder="e.g. My Savings"
+                value={newAcct.name}
+                onChange={(e) => setNewAcct({ ...newAcct, name: e.target.value })}
+              />
+            </div>
+            <div style={{ border: 'none', padding: '0 0 var(--sp-4) 0' }}>
+              <div className="label mb-2">Institution</div>
+              <input
+                required
+                placeholder="e.g. TD Bank"
+                value={newAcct.institution}
+                onChange={(e) => setNewAcct({ ...newAcct, institution: e.target.value })}
+              />
+            </div>
+            <div style={{ border: 'none', padding: '0 var(--sp-4) 0 0' }}>
+              <div className="label mb-2">Type</div>
+              <select
+                value={newAcct.account_type}
+                onChange={(e) => setNewAcct({ ...newAcct, account_type: e.target.value })}
+              >
+                {Object.entries(TYPE_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ border: 'none', padding: 0, display: 'flex', alignItems: 'flex-end', gap: 'var(--sp-4)' }}>
+              <div style={{ flex: 1 }}>
+                <div className="label mb-2">Currency</div>
+                <input
+                  required
+                  value={newAcct.currency}
+                  onChange={(e) => setNewAcct({ ...newAcct, currency: e.target.value.toUpperCase() })}
+                />
+              </div>
+              <button type="submit" className="btn btn-primary" style={{ height: 34 }}>CREATE</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <div className="kpi-row">
         <Kpi label="Cash" value={formatMoney(totals.cash, 'CAD', hideBalances)} />
@@ -172,7 +243,17 @@ export default function Accounts() {
                       {a.name}
                     </td>
                     <td className="muted num" style={{ fontSize: 10, letterSpacing: '0.1em' }}>
-                      {TYPE_LABELS[a.account_type] || (a.account_type || '').toUpperCase()}
+                      <select
+                        value={a.account_type || 'other'}
+                        onChange={(e) => {
+                          api.updateAccount(a.id, { account_type: e.target.value }).then(load).catch(alert);
+                        }}
+                        style={{ background: 'transparent', border: 'none', color: 'inherit', fontSize: 'inherit', letterSpacing: 'inherit', padding: 0, cursor: 'pointer', textTransform: 'uppercase' }}
+                      >
+                        {Object.entries(TYPE_LABELS).map(([k, v]) => (
+                          <option key={k} value={k}>{v}</option>
+                        ))}
+                      </select>
                     </td>
                     <td className={`num r ${a.balance >= 0 ? '' : 'neg'}`}>
                       {formatMoney(a.balance, a.currency, hideBalances)}

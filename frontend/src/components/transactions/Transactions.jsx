@@ -11,11 +11,12 @@ const PERIODS = [
 ];
 
 export default function Transactions() {
-  const { transactions, transactionsTotal, transactionsLoading, fetchTransactions } = useStore();
+  const { transactions, transactionsTotal, transactionsLoading, fetchTransactions, selectedAccountId, setSelectedAccountId } = useStore();
   const [days, setDays] = useState(30);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
-  const [accountId, setAccountId] = useState('');
+  const [accountId, setAccountId] = useState(selectedAccountId || '');
+  const [includeOffBudget, setIncludeOffBudget] = useState(false);
   const [categories, setCategories] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [sort, setSort] = useState({ key: 'date', dir: 'desc' });
@@ -31,9 +32,10 @@ export default function Transactions() {
       category: category || undefined,
       account_id: accountId || undefined,
       search: search || undefined,
+      include_off_budget: includeOffBudget,
       limit: 500,
     });
-  }, [days, category, accountId]);
+  }, [days, category, accountId, includeOffBudget]);
 
   const doSearch = () => {
     fetchTransactions({
@@ -41,6 +43,7 @@ export default function Transactions() {
       category: category || undefined,
       account_id: accountId || undefined,
       search: search || undefined,
+      include_off_budget: includeOffBudget,
       limit: 500,
     });
   };
@@ -72,6 +75,7 @@ export default function Transactions() {
       if (key === 'amount') { av = a.amount; bv = b.amount; }
       if (key === 'merchant') { av = (a.merchant || '').toLowerCase(); bv = (b.merchant || '').toLowerCase(); }
       if (key === 'account_name') { av = (a.account_name || ''); bv = (b.account_name || ''); }
+      if (key === 'category') { av = (a.category || '').toLowerCase(); bv = (b.category || '').toLowerCase(); }
       if (av < bv) return -1 * mult;
       if (av > bv) return  1 * mult;
       return 0;
@@ -88,15 +92,13 @@ export default function Transactions() {
     return map;
   }, [transactions]);
 
-  const sortCls = (key) => `sortable${sort.key === key ? ` sorted ${sort.dir}` : ''}`;
+  const sortCls = (k) => (sort.key === k ? `sortable active ${sort.dir}` : 'sortable');
 
   return (
     <>
       <div className="section-head">
         <h2>Ledger</h2>
-        <span className="label num">
-          {transactionsTotal} txns · showing {transactions?.length ?? 0}
-        </span>
+        <span className="label num">{transactionsTotal} rows</span>
       </div>
 
       {accounts.length > 0 && (
@@ -116,7 +118,11 @@ export default function Transactions() {
               key={a.id}
               type="button"
               className={`chip ${String(accountId) === String(a.id) ? 'active' : ''}`}
-              onClick={() => setAccountId(String(accountId) === String(a.id) ? '' : String(a.id))}
+              onClick={() => {
+                const newId = String(accountId) === String(a.id) ? '' : String(a.id);
+                setAccountId(newId);
+                setSelectedAccountId(newId);
+              }}
               title={`${a.institution} · ${a.currency} · balance ${a.balance}`}
             >
               {a.name}
@@ -151,6 +157,15 @@ export default function Transactions() {
           ))}
         </select>
         <div style={{ flex: 1 }} />
+        <button
+          type="button"
+          className={`toggle ${includeOffBudget ? 'on' : ''}`}
+          onClick={() => setIncludeOffBudget(!includeOffBudget)}
+          style={{ marginRight: 'var(--sp-4)' }}
+        >
+          <div className="toggle-knob" />
+          <span className="toggle-label">Include Off-Budget</span>
+        </button>
         <input
           type="search"
           placeholder="SEARCH MERCHANTS…"
@@ -168,7 +183,7 @@ export default function Transactions() {
               <th className={sortCls('date')} style={{ width: 90 }} onClick={() => toggleSort('date')}>Date</th>
               <th className={sortCls('merchant')} onClick={() => toggleSort('merchant')}>Merchant</th>
               <th className={sortCls('account_name')} style={{ width: 140 }} onClick={() => toggleSort('account_name')}>Account</th>
-              <th style={{ width: 180 }}>Category</th>
+              <th className={sortCls('category')} style={{ width: 180 }} onClick={() => toggleSort('category')}>Category</th>
               <th className={`r ${sortCls('amount')}`} style={{ width: 140 }} onClick={() => toggleSort('amount')}>Amount</th>
               <th style={{ width: 50 }}>Ccy</th>
             </tr>
@@ -178,21 +193,14 @@ export default function Transactions() {
               const cat = categories.find((c) => c.name === tx.category);
               return (
                 <tr key={tx.id}>
-                  <td className="num muted">
-                    {tx.pending && <span className="pending-dot" title="Pending">●</span>}
-                    {formatDate(tx.date)}
+                  <td className="num muted">{formatDate(tx.date)}</td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontWeight: 500 }}>{tx.normalized_merchant || tx.merchant}</span>
+                      {tx.pending && <span className="label" style={{ fontSize: 8, padding: '1px 4px', background: 'var(--paper-3)' }}>PENDING</span>}
+                    </div>
                   </td>
-                  <td title={tx.memo || tx.description || ''}>
-                    {tx.merchant}
-                    {tx.memo && (
-                      <span className="muted" style={{ marginLeft: 8, fontSize: 10, fontFamily: 'var(--font-mono)' }}>
-                        · {tx.memo.slice(0, 60)}{tx.memo.length > 60 ? '…' : ''}
-                      </span>
-                    )}
-                  </td>
-                  <td className="num muted" style={{ fontSize: 11 }}>
-                    {tx.account_name ? tx.account_name : '—'}
-                  </td>
+                  <td className="muted truncate" title={tx.account_name}>{tx.account_name}</td>
                   <td>
                     <select
                       value={tx.category || 'Other'}

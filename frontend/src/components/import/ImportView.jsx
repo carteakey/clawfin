@@ -83,7 +83,21 @@ export default function ImportView() {
       </div>
 
       {(tab === 'csv' || tab === 'wealthsimple') && (
-        <>
+        <div style={{ maxWidth: 560 }}>
+          {tab === 'csv' && accounts.length > 0 && (
+            <div className="mb-4">
+              <div className="label mb-2">Target Account (Optional)</div>
+              <select
+                value={targetAccountId}
+                onChange={(e) => setTargetAccountId(e.target.value)}
+              >
+                <option value="">AUTO-DETECT OR UNASSIGNED</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.institution} — {a.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div
             className={`drop-zone ${dragging ? 'dragging' : ''}`}
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -97,7 +111,7 @@ export default function ImportView() {
             </span>
           </div>
           <input id="file-input" type="file" accept=".csv" onChange={onFileInput} style={{ display: 'none' }} />
-        </>
+        </div>
       )}
 
       {tab === 'simplefin' && (

@@ -238,10 +238,15 @@ def _recurring_activity(db: Session, start: date, end: date) -> dict:
         items.sort(key=lambda tx: tx.date)
         intervals = [(items[i].date - items[i - 1].date).days for i in range(1, len(items))]
         cadence = _median(intervals)
-        if cadence < 6 or cadence > 45:
+        if cadence < 5 or cadence > 45:
             continue
         amounts = [tx.amount for tx in items]
         avg_amount = sum(amounts) / len(amounts)
+        if avg_amount == 0:
+            continue
+        variance_ok = all(abs(a - avg_amount) / abs(avg_amount) <= 0.15 for a in amounts)
+        if not variance_ok:
+            continue
         last = items[-1]
         row = {
             "merchant": _merchant_name(last),

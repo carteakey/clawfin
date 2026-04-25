@@ -2,11 +2,11 @@
 from collections import defaultdict
 from datetime import date, timedelta
 from statistics import mean, median
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from backend.db.database import get_db
-from backend.db.models import Transaction, CategoryRule, AppConfig, Account
+from backend.db.models import Transaction, CategoryRule, AppConfig, Account, AccountType, DataSource
 from backend.ingestion.categorizer import categorize_transactions, ai_categorize_batch
 from backend.ingestion.transfer_detector import redetect_transfers_in_db
 
@@ -27,10 +27,17 @@ def list_transactions(
     search: str = Query(None),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
+    include_off_budget: bool = Query(False),
     db: Session = Depends(get_db),
 ):
     cutoff = date.today() - timedelta(days=days)
     q = db.query(Transaction).filter(Transaction.date >= cutoff)
+
+    if not include_off_budget:
+        from sqlalchemy import or_
+        q = q.outerjoin(Account, Transaction.account_id == Account.id).filter(
+            or_(Transaction.account_id.is_(None), Account.on_budget.is_(True))
+        )
 
     if category:
         q = q.filter(Transaction.category == category)
@@ -68,7 +75,7 @@ def list_transactions(
                 "source": tx.source.value if tx.source else None,
             }
             for tx in txs
-        ],
+        ]
     }
 
 
@@ -76,31 +83,23 @@ def list_transactions(
 def update_transaction(tx_id: int, update: TransactionUpdate, db: Session = Depends(get_db)):
     tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
     if not tx:
-        return {"error": "Transaction not found"}, 404
+        raise HTTPException(status_code=404, detail="Transaction not found")
 
     if update.category is not None:
         tx.category = update.category
+        if update.save_rule and tx.merchant:
+            # Upsert rule
+            rule = db.query(CategoryRule).filter(CategoryRule.pattern == tx.merchant).first()
+            if rule:
+                rule.category = update.category
+            else:
+                db.add(CategoryRule(pattern=tx.merchant, category=update.category, priority=10))
+
     if update.normalized_merchant is not None:
         tx.normalized_merchant = update.normalized_merchant
 
-    # If requested, learn a rule from this override so future imports stick.
-    rule_id = None
-    if update.save_rule and update.category:
-        pattern = (tx.normalized_merchant or tx.merchant or "").strip().lower()
-        if pattern:
-            existing = db.query(CategoryRule).filter(CategoryRule.pattern == pattern).first()
-            if existing:
-                existing.category = update.category
-                existing.priority = max(existing.priority, 1)
-                rule_id = existing.id
-            else:
-                rule = CategoryRule(pattern=pattern, category=update.category, priority=1, is_regex=False)
-                db.add(rule)
-                db.flush()
-                rule_id = rule.id
-
     db.commit()
-    return {"status": "updated", "id": tx_id, "rule_id": rule_id}
+    return {"status": "ok", "id": tx_id}
 
 
 @router.post("/accounts/reinfer-types")
@@ -123,27 +122,6 @@ def reinfer_account_types(db: Session = Depends(get_db)):
             updated += 1
     db.commit()
     return {"status": "ok", "updated": updated, "total": len(accts)}
-
-
-@router.post("/redetect-transfers")
-def redetect_transfers(
-    days: int = Query(None, ge=1, le=3650),
-    db: Session = Depends(get_db),
-):
-    """
-    Re-run internal transfer detection over committed transactions.
-
-    Pairs same-amount / opposite-sign transactions within 2 days across
-    different accounts and marks them category="Transfer". Covers:
-      - Chequing → Savings
-      - Chequing → TFSA / RRSP / FHSA (on-budget → investment)
-      - Credit card payments
-
-    Use ?days=N to limit to recent history; omit to scan all time.
-    Already-Transfer rows are left as-is if they no longer have a counterpart.
-    """
-    result = redetect_transfers_in_db(db, days=days)
-    return {"status": "ok", **result}
 
 
 @router.get("/accounts")
@@ -173,10 +151,34 @@ def list_accounts_for_filter(db: Session = Depends(get_db)):
     }
 
 
-from fastapi import HTTPException
-
 class AccountUpdate(BaseModel):
     on_budget: bool | None = None
+    account_type: AccountType | None = None
+
+
+class AccountCreate(BaseModel):
+    name: str
+    institution: str
+    account_type: AccountType
+    currency: str = "CAD"
+    on_budget: bool = True
+
+
+@router.post("/accounts")
+def create_account(req: AccountCreate, db: Session = Depends(get_db)):
+    account = Account(
+        name=req.name,
+        institution=req.institution,
+        account_type=req.account_type,
+        currency=req.currency,
+        on_budget=req.on_budget,
+        source=DataSource.MANUAL,
+    )
+    db.add(account)
+    db.commit()
+    db.refresh(account)
+    return {"status": "created", "id": account.id}
+
 
 @router.patch("/accounts/{account_id}")
 def update_account(account_id: int, update: AccountUpdate, db: Session = Depends(get_db)):
@@ -186,9 +188,12 @@ def update_account(account_id: int, update: AccountUpdate, db: Session = Depends
 
     if update.on_budget is not None:
         account.on_budget = update.on_budget
+    if update.account_type is not None:
+        account.account_type = update.account_type
 
     db.commit()
     return {"status": "updated", "id": account_id}
+
 
 @router.delete("/accounts/{account_id}")
 def delete_account(account_id: int, db: Session = Depends(get_db)):
@@ -209,11 +214,12 @@ def list_recurring(db: Session = Depends(get_db)):
     """
     Detect recurring outflows (subscriptions, EMIs, bills, insurance).
     Heuristic: same normalized merchant, ≥3 occurrences in last 180 days,
-    stable amount (±15%), cadence 6-35 days. Classifies each.
+    stable amount (±15%), cadence 5-45 days. Classifies each.
     """
     lookback = date.today() - timedelta(days=180)
+    from backend.routers.dashboard import _budget_transaction_query
     txs = (
-        db.query(Transaction)
+        _budget_transaction_query(db)
         .filter(
             Transaction.date >= lookback,
             Transaction.amount < 0,
@@ -237,7 +243,8 @@ def list_recurring(db: Session = Depends(get_db)):
         if not intervals:
             continue
         cadence = median(intervals)
-        if cadence < 6 or cadence > 35:
+        if cadence < 5 or cadence > 45:
+            # Focus on weekly-to-monthly recurring; skip daily noise and annual events
             continue
 
         amounts = [t.amount for t in items]

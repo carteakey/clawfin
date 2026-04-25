@@ -50,6 +50,7 @@ export const api = {
   },
   updateTransaction: (id, data) => request(`/transactions/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   getAccounts: () => request('/transactions/accounts'),
+  createAccount: (data) => request('/transactions/accounts', { method: 'POST', body: JSON.stringify(data) }),
   updateAccount: (id, data) => request(`/transactions/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteAccount: (id) => request(`/transactions/accounts/${id}`, { method: 'DELETE' }),
   reinferAccountTypes: () => request('/transactions/accounts/reinfer-types', { method: 'POST' }),
@@ -65,9 +66,10 @@ export const api = {
   getHoldingsDates: () => request('/holdings/dates'),
 
   // Import
-  uploadCSV: async (file, bankHint = null) => {
+  uploadCSV: async (file, accountId = null, bankHint = null) => {
     const form = new FormData();
     form.append('file', file);
+    if (accountId) form.append('account_id', accountId);
     if (bankHint) form.append('bank_hint', bankHint);
     const headers = {};
     if (authToken) headers['Authorization'] = `Bearer ${authToken}`;

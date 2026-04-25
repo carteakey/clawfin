@@ -192,7 +192,11 @@ def list_recurring(db: Session = Depends(get_db)):
     lookback = date.today() - timedelta(days=180)
     txs = (
         db.query(Transaction)
-        .filter(Transaction.date >= lookback, Transaction.amount < 0)
+        .filter(
+            Transaction.date >= lookback,
+            Transaction.amount < 0,
+            Transaction.category != "Transfer",
+        )
         .all()
     )
 

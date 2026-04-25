@@ -11,6 +11,7 @@ from backend.ingestion.parser import parse_csv
 from backend.ingestion.wealthsimple import parse_holdings, parse_activity, detect_wealthsimple_type
 from backend.ingestion.categorizer import categorize_transactions
 from backend.ingestion.dedup import dedup_transactions
+from backend.ingestion.transfer_detector import detect_internal_transfers
 from backend.ingestion.simplefin import SimpleFinClient
 from backend.config import settings
 
@@ -43,6 +44,9 @@ async def import_csv(
     # Dedup
     new_txs, skipped = dedup_transactions(transactions, db, account_id=account_id)
 
+    # Detect internal transfers (same amount, opposite sign, ≤2 days apart, different accounts)
+    transfers_marked = detect_internal_transfers(new_txs)
+
     # Insert
     for tx in new_txs:
         db.add(Transaction(
@@ -64,6 +68,7 @@ async def import_csv(
         "bank": result["bank"],
         "imported": len(new_txs),
         "skipped": skipped,
+        "transfers_marked": transfers_marked,
         "total_rows": result["row_count"],
     }
 
@@ -242,6 +247,22 @@ async def simplefin_sync(db: Session = Depends(get_db)):
 
     categorize_transactions(sf_transactions, db)
     new_txs, skipped = dedup_transactions(sf_transactions, db)
+
+    # Detect internal transfers — also match against recent committed transactions
+    # (SimpleFIN syncs are incremental; the counterpart may already be in the DB)
+    lookback = date.today() - timedelta(days=5)
+    recent_committed = [
+        {
+            "amount": t.amount,
+            "date": t.date.isoformat(),
+            "account_id": t.account_id,
+            "category": t.category,
+        }
+        for t in db.query(Transaction)
+        .filter(Transaction.date >= lookback, Transaction.category != "Transfer")
+        .all()
+    ]
+    transfers_marked = detect_internal_transfers(new_txs, existing_txs=recent_committed)
 
     for tx in new_txs:
         db.add(Transaction(

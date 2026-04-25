@@ -33,7 +33,7 @@ export default function Dashboard() {
   if (dashboardLoading && !dashboard) return <div className="loading label">Loading…</div>;
   if (!dashboard) return <EmptyState />;
 
-  const { kpis, spending_breakdown, top_merchants, daily_spending } = dashboard;
+  const { kpis, spending_breakdown, top_merchants, daily_spending, transfer_count } = dashboard;
 
   const dailyData = Object.entries(daily_spending || {}).map(([date, amount]) => ({
     date: new Date(date + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }),
@@ -73,6 +73,11 @@ export default function Dashboard() {
         <Kpi label="Savings Rate" value={`${kpis.savings_rate}%`} />
         <Kpi label="Txns" value={dashboard.transaction_count} />
       </div>
+      {transfer_count > 0 && (
+        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--ink-3)', letterSpacing: '0.08em', marginTop: 'calc(-1 * var(--sp-4))', marginBottom: 'var(--sp-4)', textTransform: 'uppercase' }}>
+          ↔ {transfer_count} transfer{transfer_count !== 1 ? 's' : ''} excluded from income &amp; expenses
+        </div>
+      )}
 
       {/* Cash flow waterfall */}
       <div className="section">

@@ -49,11 +49,13 @@ def get_dashboard(
         Transaction.date >= prev_cutoff, Transaction.date < cutoff
     ).all()
 
-    # KPIs
-    income = sum(tx.amount for tx in txs if tx.amount > 0)
-    expenses = abs(sum(tx.amount for tx in txs if tx.amount < 0))
-    prev_income = sum(tx.amount for tx in prev_txs if tx.amount > 0)
-    prev_expenses = abs(sum(tx.amount for tx in prev_txs if tx.amount < 0))
+    # KPIs — exclude Transfer category to avoid double-counting internal moves
+    TRANSFER_CAT = "Transfer"
+    income = sum(tx.amount for tx in txs if tx.amount > 0 and tx.category != TRANSFER_CAT)
+    expenses = abs(sum(tx.amount for tx in txs if tx.amount < 0 and tx.category != TRANSFER_CAT))
+    prev_income = sum(tx.amount for tx in prev_txs if tx.amount > 0 and tx.category != TRANSFER_CAT)
+    prev_expenses = abs(sum(tx.amount for tx in prev_txs if tx.amount < 0 and tx.category != TRANSFER_CAT))
+    transfer_count = sum(1 for tx in txs if tx.category == TRANSFER_CAT)
 
     savings_rate = ((income - expenses) / income * 100) if income > 0 else 0
 
@@ -64,19 +66,19 @@ def get_dashboard(
     total_accounts = sum(a.balance for a in accounts)
     total_holdings = sum(h.market_value for h in holdings)
 
-    # Spending by category
+    # Spending by category (exclude Transfer)
     category_spending = {}
     for tx in txs:
-        if tx.amount < 0:
+        if tx.amount < 0 and tx.category != TRANSFER_CAT:
             cat = tx.category or "Other"
             category_spending.setdefault(cat, {"total": 0, "count": 0})
             category_spending[cat]["total"] += abs(tx.amount)
             category_spending[cat]["count"] += 1
 
-    # Previous period for deltas
+    # Previous period for deltas (exclude Transfer)
     prev_category_spending = {}
     for tx in prev_txs:
-        if tx.amount < 0:
+        if tx.amount < 0 and tx.category != TRANSFER_CAT:
             cat = tx.category or "Other"
             prev_category_spending.setdefault(cat, 0)
             prev_category_spending[cat] += abs(tx.amount)
@@ -93,10 +95,10 @@ def get_dashboard(
             "delta_pct": round(delta_pct, 1),
         })
 
-    # Top merchants
+    # Top merchants (exclude Transfer)
     merchant_totals = {}
     for tx in txs:
-        if tx.amount < 0:
+        if tx.amount < 0 and tx.category != TRANSFER_CAT:
             m = tx.normalized_merchant or tx.merchant
             merchant_totals.setdefault(m, {"total": 0, "count": 0})
             merchant_totals[m]["total"] += abs(tx.amount)
@@ -107,10 +109,10 @@ def get_dashboard(
         for m, d in sorted(merchant_totals.items(), key=lambda x: -x[1]["total"])[:10]
     ]
 
-    # Daily spending (for bar chart)
+    # Daily spending (for bar chart) — exclude Transfer
     daily_spending = {}
     for tx in txs:
-        if tx.amount < 0:
+        if tx.amount < 0 and tx.category != TRANSFER_CAT:
             day = tx.date.isoformat()
             daily_spending.setdefault(day, 0)
             daily_spending[day] += abs(tx.amount)
@@ -133,6 +135,7 @@ def get_dashboard(
         "daily_spending": dict(sorted(daily_spending.items())),
         "account_count": len(accounts),
         "transaction_count": len(txs),
+        "transfer_count": transfer_count,
     }
 
 
@@ -232,6 +235,9 @@ def _detect_recurring(txs: list[Transaction], min_occurrences: int = 3, toleranc
 
     detected = []
     for merchant, items in by_merchant.items():
+        # Skip transfers — internal moves look periodic but aren't real spend
+        if any(t.category == "Transfer" for t in items):
+            continue
         if len(items) < min_occurrences:
             continue
         items.sort(key=lambda t: t.date)

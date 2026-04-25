@@ -15,13 +15,20 @@ export default function ImportView() {
   const [sfToken, setSfToken] = useState('');
   const [sfStatus, setSfStatus] = useState(null);
   const [sfAccounts, setSfAccounts] = useState(null);
+  const [targetAccountId, setTargetAccountId] = useState('');
+  const [accounts, setAccounts] = useState([]);
 
   useEffect(() => {
+    api.getAccounts().then(d => {
+      const list = d.accounts || [];
+      setAccounts(list);
+      if (tab === 'simplefin') {
+        setSfAccounts(list.filter(a => a.source === 'simplefin'));
+      }
+    }).catch(console.error);
+
     if (tab === 'simplefin') {
       api.simpleFinStatus().then(setSfStatus).catch(console.error);
-      api.getAccounts().then(d => {
-        setSfAccounts((d.accounts || []).filter(a => a.source === 'simplefin'));
-      }).catch(console.error);
     }
   }, [tab, result]);
 
@@ -31,13 +38,13 @@ export default function ImportView() {
     try {
       const data = tab === 'wealthsimple'
         ? await api.uploadWealthsimple(file)
-        : await api.uploadCSV(file);
+        : await api.uploadCSV(file, targetAccountId || null);
       setResult(data);
     } catch (e) {
       setResult({ error: e.message });
     }
     setImporting(false);
-  }, [tab]);
+  }, [tab, targetAccountId]);
 
   const onDrop = useCallback((e) => {
     e.preventDefault();

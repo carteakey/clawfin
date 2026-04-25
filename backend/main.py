@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.config import settings
 from backend.db.database import init_db
@@ -23,13 +23,13 @@ app.add_middleware(
 
 # Register routers
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(transactions.router, prefix="/api/transactions", tags=["transactions"])
-app.include_router(holdings.router, prefix="/api/holdings", tags=["holdings"])
-app.include_router(import_data.router, prefix="/api/import", tags=["import"])
-app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
-app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
+app.include_router(transactions.router, prefix="/api/transactions", tags=["transactions"], dependencies=[Depends(auth.require_auth)])
+app.include_router(holdings.router, prefix="/api/holdings", tags=["holdings"], dependencies=[Depends(auth.require_auth)])
+app.include_router(import_data.router, prefix="/api/import", tags=["import"], dependencies=[Depends(auth.require_auth)])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"], dependencies=[Depends(auth.require_auth)])
+app.include_router(chat.router, prefix="/api/chat", tags=["chat"], dependencies=[Depends(auth.require_auth)])
 app.include_router(briefings.router, prefix="/api/briefings", tags=["briefings"])
-app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"])
+app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"], dependencies=[Depends(auth.require_auth)])
 
 
 @app.on_event("startup")

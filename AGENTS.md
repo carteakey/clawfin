@@ -42,6 +42,8 @@ Recent history follows Conventional Commit style with optional scopes, for examp
 ## Security & Configuration Tips
 Start from `.env.example`; never commit real secrets. Document new environment variables there when adding them. Treat `CLAWFIN_SECRET_KEY`, provider API keys, and the SQLite path (`~/.clawfin/clawfin.db` locally, `/data/clawfin.db` in Docker) as sensitive configuration.
 
+When `CLAWFIN_PASSWORD` is configured, normal app API routers require the UI JWT from `/api/auth/login`. Keep `/api/auth/*` and `/api/health` public, and keep machine-to-machine briefing automation on the separate automation-token path.
+
 Briefing and automation endpoints use a separate `CLAWFIN_AUTOMATION_TOKEN`; require the `X-ClawFin-Automation-Token` header for machine-to-machine calls. Do not reuse the UI JWT, SimpleFIN access URL, or AI provider keys in scheduler or LLM prompts.
 
 SimpleFIN sync stores account freshness metadata on `Account`: `last_sync_at`, `last_successful_balance_date`, `last_successful_transaction_date`, `last_sync_error`, `simplefin_account_present`, and `stale_reason`. Preserve these fields when touching sync, account listing, or briefing logic because they drive reconnect nudges. Stale sync detection is based on `CLAWFIN_SIMPLEFIN_STALE_DAYS`, not transaction activity recency.

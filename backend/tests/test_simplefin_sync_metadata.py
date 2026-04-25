@@ -12,6 +12,7 @@ def _posted(days_ago: int) -> int:
 
 
 def test_simplefin_sync_persists_account_metadata(client, db, monkeypatch):
+    monkeypatch.setattr(settings, "PASSWORD", "")
     monkeypatch.setattr(settings, "SIMPLEFIN_ACCESS_URL", "https://user:pass@example.com/simplefin")
 
     async def fake_fetch(self, start_date=None, end_date=None):
@@ -48,6 +49,7 @@ def test_simplefin_sync_persists_account_metadata(client, db, monkeypatch):
 
 
 def test_simplefin_sync_marks_missing_accounts_stale(client, db, monkeypatch):
+    monkeypatch.setattr(settings, "PASSWORD", "")
     monkeypatch.setattr(settings, "SIMPLEFIN_ACCESS_URL", "https://user:pass@example.com/simplefin")
 
     responses = [

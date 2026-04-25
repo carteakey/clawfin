@@ -3,6 +3,7 @@ import json
 from datetime import date, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from backend.ai.briefings import build_transaction_briefing_context
 from backend.db.models import Transaction, Holding, Account, Snapshot, Category
 
 
@@ -85,6 +86,23 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_transaction_briefing_context",
+            "description": "Get daily or weekly transaction briefing context including spending, income, pending/uncategorized counts, unusual spending, recurring activity, and stale account/reconnect nudges.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "period": {"type": "string", "enum": ["daily", "weekly"], "description": "Briefing period"},
+                    "include_transactions": {"type": "boolean", "description": "Whether to include recent transaction rows"},
+                    "max_transactions": {"type": "integer", "description": "Maximum transaction rows if included"},
+                    "redact_merchants": {"type": "boolean", "description": "Redact merchant names in the context"},
+                },
+                "required": ["period"],
+            },
+        },
+    },
 ]
 
 
@@ -99,6 +117,7 @@ def execute_tool(name: str, arguments: dict, db: Session) -> str:
         "get_net_worth": _get_net_worth,
         "simulate_savings": _simulate_savings,
         "search_transactions": _search_transactions,
+        "get_transaction_briefing_context": _get_transaction_briefing_context,
     }
 
     handler = handlers.get(name)
@@ -246,3 +265,19 @@ def _search_transactions(db: Session, merchant: str = None, min_amount: float = 
             for tx in txs
         ],
     }
+
+
+def _get_transaction_briefing_context(
+    db: Session,
+    period: str,
+    include_transactions: bool = False,
+    max_transactions: int = 25,
+    redact_merchants: bool = False,
+) -> dict:
+    return build_transaction_briefing_context(
+        db,
+        period=period,
+        include_transactions=include_transactions,
+        max_transactions=max_transactions,
+        redact_merchants=redact_merchants,
+    )

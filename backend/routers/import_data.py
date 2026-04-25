@@ -1,7 +1,7 @@
 """Import API router — CSV upload, SimpleFin, Wealthsimple."""
 import csv
 import io
-from datetime import date
+from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -156,14 +156,36 @@ async def simplefin_sync(db: Session = Depends(get_db)):
     if not access_url:
         raise HTTPException(status_code=400, detail="SimpleFin not configured. Set CLAWFIN_SIMPLEFIN_ACCESS_URL.")
 
-    from datetime import timedelta
     client = SimpleFinClient(access_url)
+    sync_started_at = datetime.utcnow()
     start_date = date.today() - timedelta(days=90)
-    raw_data = await client.fetch_accounts(start_date=start_date)
+    try:
+        raw_data = await client.fetch_accounts(start_date=start_date)
+    except Exception as e:
+        error = str(e)[:1000]
+        for account in db.query(Account).filter(Account.source == DataSource.SIMPLEFIN).all():
+            account.last_sync_at = sync_started_at
+            account.last_sync_error = error
+            account.stale_reason = _simplefin_stale_reason(
+                account,
+                today=date.today(),
+                sync_error=error,
+                account_present=bool(account.simplefin_account_present),
+            )
+        db.commit()
+        raise HTTPException(status_code=502, detail=f"SimpleFin sync failed: {error}")
 
     # Sync accounts
     sf_accounts = client.normalize_accounts(raw_data)
+    seen_external_ids = {acct["external_id"] for acct in sf_accounts}
+    latest_tx_by_external_id = _latest_simplefin_transaction_dates(raw_data)
     account_map = {}  # external_id -> db account_id
+
+    for account in db.query(Account).filter(Account.source == DataSource.SIMPLEFIN).all():
+        account.last_sync_at = sync_started_at
+        account.simplefin_account_present = account.external_id in seen_external_ids
+        if not account.simplefin_account_present:
+            account.stale_reason = "missing_from_simplefin_response"
 
     for acct in sf_accounts:
         inferred = acct.get("account_type", "other")
@@ -176,6 +198,12 @@ async def simplefin_sync(db: Session = Depends(get_db)):
             existing.balance = acct["balance"]
             existing.available_balance = acct.get("available_balance")
             existing.balance_date = acct.get("balance_date")
+            existing.last_sync_at = sync_started_at
+            existing.last_successful_balance_date = acct.get("balance_date")
+            existing.last_successful_transaction_date = latest_tx_by_external_id.get(acct["external_id"])
+            existing.last_sync_error = None
+            existing.simplefin_account_present = True
+            existing.stale_reason = _simplefin_stale_reason(existing, today=date.today())
             # Only backfill type if it was the default chequing (i.e. previously imported with hardcoded type)
             if existing.account_type == AccountType.CHEQUING and acct_type != AccountType.CHEQUING:
                 existing.account_type = acct_type
@@ -191,7 +219,13 @@ async def simplefin_sync(db: Session = Depends(get_db)):
                 balance_date=acct.get("balance_date"),
                 source=DataSource.SIMPLEFIN,
                 external_id=acct["external_id"],
+                last_sync_at=sync_started_at,
+                last_successful_balance_date=acct.get("balance_date"),
+                last_successful_transaction_date=latest_tx_by_external_id.get(acct["external_id"]),
+                last_sync_error=None,
+                simplefin_account_present=True,
             )
+            new_acct.stale_reason = _simplefin_stale_reason(new_acct, today=date.today())
             db.add(new_acct)
             db.flush()
             account_map[acct["external_id"]] = new_acct.id
@@ -226,4 +260,53 @@ async def simplefin_sync(db: Session = Depends(get_db)):
         "accounts_synced": len(sf_accounts),
         "imported": len(new_txs),
         "skipped": skipped,
+        "stale_accounts": [
+            {
+                "id": account.id,
+                "name": account.name,
+                "institution": account.institution,
+                "stale_reason": account.stale_reason,
+                "last_sync_error": account.last_sync_error,
+                "simplefin_account_present": bool(account.simplefin_account_present),
+            }
+            for account in db.query(Account)
+            .filter(Account.source == DataSource.SIMPLEFIN, Account.stale_reason.isnot(None))
+            .order_by(Account.institution, Account.name)
+            .all()
+        ],
     }
+
+
+def _latest_simplefin_transaction_dates(raw_data: dict) -> dict[str, date]:
+    latest: dict[str, date] = {}
+    for account in raw_data.get("accounts", []):
+        external_id = account.get("id", "")
+        for tx in account.get("transactions", []):
+            posted = tx.get("posted", 0) or tx.get("transacted_at", 0)
+            if not posted:
+                continue
+            tx_date = datetime.fromtimestamp(posted).date()
+            if external_id and (external_id not in latest or tx_date > latest[external_id]):
+                latest[external_id] = tx_date
+    return latest
+
+
+def _simplefin_stale_reason(
+    account: Account,
+    today: date,
+    sync_error: str | None = None,
+    account_present: bool = True,
+) -> str | None:
+    if sync_error:
+        lowered = sync_error.lower()
+        if any(token in lowered for token in ("401", "403", "unauthorized", "forbidden", "auth")):
+            return "simplefin_auth_error"
+        return "simplefin_sync_error"
+    if not account_present:
+        return "missing_from_simplefin_response"
+
+    if not account.last_sync_at:
+        return "never_synced"
+    if (today - account.last_sync_at.date()).days >= 3:
+        return "simplefin_sync_stale"
+    return None

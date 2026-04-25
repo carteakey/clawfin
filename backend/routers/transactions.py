@@ -137,6 +137,12 @@ def list_accounts_for_filter(db: Session = Depends(get_db)):
                 "currency": a.currency,
                 "balance": round(a.balance or 0, 2),
                 "available_balance": round(a.available_balance, 2) if a.available_balance is not None else None,
+                "last_sync_at": a.last_sync_at.isoformat() if a.last_sync_at else None,
+                "last_successful_balance_date": a.last_successful_balance_date.isoformat() if a.last_successful_balance_date else None,
+                "last_successful_transaction_date": a.last_successful_transaction_date.isoformat() if a.last_successful_transaction_date else None,
+                "last_sync_error": a.last_sync_error,
+                "simplefin_account_present": bool(a.simplefin_account_present),
+                "stale_reason": a.stale_reason,
             }
             for a in accounts
         ]

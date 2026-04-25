@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.config import settings
 from backend.db.database import init_db
 from backend.db.seed import seed_default_categories
-from backend.routers import auth, transactions, holdings, import_data, dashboard, chat, settings as settings_router
+from backend.routers import auth, transactions, holdings, import_data, dashboard, chat, briefings, settings as settings_router
 
 
 app = FastAPI(
@@ -28,6 +28,7 @@ app.include_router(holdings.router, prefix="/api/holdings", tags=["holdings"])
 app.include_router(import_data.router, prefix="/api/import", tags=["import"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
+app.include_router(briefings.router, prefix="/api/briefings", tags=["briefings"])
 app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"])
 
 

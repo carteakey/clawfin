@@ -27,6 +27,11 @@ export default function ChatPanel() {
     setInput('');
   };
 
+  const runPreset = (message) => {
+    if (chatLoading) return;
+    sendMessage(message);
+  };
+
   const modelLabel = aiConfig
     ? `${(aiConfig.provider || 'none').toUpperCase()} · ${aiConfig.model || '—'}`
     : '';
@@ -45,6 +50,29 @@ export default function ChatPanel() {
         {chatMessages.length === 0 && (
           <div style={{ padding: 'var(--sp-5) 0' }}>
             <div className="label mb-3">Ask Your Ledger</div>
+            <div className="chat-presets">
+              <button
+                type="button"
+                onClick={() => runPreset('Generate my daily transaction briefing. Use the briefing context tool with period daily. Keep it concise, notification-friendly, and include any stale SimpleFIN account reconnect nudges.')}
+                disabled={chatLoading}
+              >
+                Daily Brief
+              </button>
+              <button
+                type="button"
+                onClick={() => runPreset('Generate my weekly transaction briefing. Use the briefing context tool with period weekly. Keep it concise, notification-friendly, and include unusual spending, recurring activity, and stale SimpleFIN account reconnect nudges.')}
+                disabled={chatLoading}
+              >
+                Weekly Brief
+              </button>
+              <button
+                type="button"
+                onClick={() => runPreset('Generate a privacy-minimized daily transaction briefing. Use the briefing context tool with period daily and redact merchant names. Keep it concise and notification-friendly.')}
+                disabled={chatLoading}
+              >
+                Private Daily
+              </button>
+            </div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: 1.7, color: 'var(--ink-2)' }}>
               &gt; what did i spend on groceries last month<br />
               &gt; show my top 5 merchants<br />

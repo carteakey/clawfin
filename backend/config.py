@@ -15,6 +15,7 @@ class Settings:
     PASSWORD: str = os.getenv("CLAWFIN_PASSWORD", "")
     SECRET_KEY: str = os.getenv("CLAWFIN_SECRET_KEY", "clawfin-dev-secret-change-me")
     TOKEN_EXPIRE_HOURS: int = int(os.getenv("CLAWFIN_TOKEN_EXPIRE_HOURS", "72"))
+    AUTOMATION_TOKEN: str = os.getenv("CLAWFIN_AUTOMATION_TOKEN", "")
 
     # SimpleFin
     SIMPLEFIN_ACCESS_URL: str = os.getenv("CLAWFIN_SIMPLEFIN_ACCESS_URL", "")

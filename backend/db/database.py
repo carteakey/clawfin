@@ -51,6 +51,12 @@ def _apply_column_migrations():
     migrations = [
         ("accounts", "available_balance", "FLOAT"),
         ("accounts", "balance_date",      "DATETIME"),
+        ("accounts", "last_sync_at",      "DATETIME"),
+        ("accounts", "last_successful_balance_date", "DATETIME"),
+        ("accounts", "last_successful_transaction_date", "DATE"),
+        ("accounts", "last_sync_error",   "TEXT"),
+        ("accounts", "simplefin_account_present", "BOOLEAN NOT NULL DEFAULT 1"),
+        ("accounts", "stale_reason",      "VARCHAR(100)"),
         ("transactions", "memo",          "TEXT"),
         ("transactions", "pending",       "BOOLEAN NOT NULL DEFAULT 0"),
     ]

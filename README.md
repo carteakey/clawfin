@@ -43,6 +43,63 @@ ClawFin is a privacy-first, self-hosted, AI-native personal finance dashboard ta
 
 ## 🚀 Getting Started
 
+### Quickstart
+
+```bash
+cp .env.example .env
+```
+
+Set the basics in `.env`:
+
+```bash
+CLAWFIN_PASSWORD=dev
+CLAWFIN_SECRET_KEY=<openssl-rand-hex-32>
+CLAWFIN_AUTOMATION_TOKEN=<openssl-rand-hex-32>
+CLAWFIN_AI_PROVIDER=ollama
+CLAWFIN_AI_MODEL=llama3.1
+CLAWFIN_AI_BASE_URL=http://localhost:11434
+CLAWFIN_SIMPLEFIN_STALE_DAYS=3
+```
+
+Run the app locally:
+
+```bash
+# Terminal 1
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+uvicorn backend.main:app --reload
+
+# Terminal 2
+cd frontend
+npm install
+npm run dev
+```
+
+Open the Vite URL, usually `http://localhost:5173`, and log in with `CLAWFIN_PASSWORD`.
+
+To test AI briefings in the UI:
+
+1. Import transactions via CSV or sync SimpleFIN.
+2. Open chat with `⇧⌘K`.
+3. Use `Daily Brief`, `Weekly Brief`, or `Private Daily`.
+
+To smoke-test the automation endpoint:
+
+```bash
+curl -X POST http://localhost:8000/api/briefings/transactions \
+  -H "Content-Type: application/json" \
+  -H "X-ClawFin-Automation-Token: $CLAWFIN_AUTOMATION_TOKEN" \
+  -d '{"period":"daily","mode":"context","include_transactions":true}'
+```
+
+Run verification before opening a PR:
+
+```bash
+PYTHONPATH=. pytest backend/tests -q
+cd frontend && npm run build
+```
+
 ### 1. Configure
 
 ```bash

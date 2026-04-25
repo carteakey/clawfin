@@ -108,6 +108,37 @@ function DataPanel() {
         </div>
         {reinferMsg && <div className="num" style={{ fontSize: 12 }}>{reinferMsg}</div>}
       </div>
+
+      <div className="block mt-4" style={{ maxWidth: 720 }}>
+        <div className="block-title">Transfers</div>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+              Redetect Internal Transfers
+            </div>
+            <div className="muted mt-2" style={{ fontSize: 11, lineHeight: 1.6 }}>
+              Scan your history for matching pairs of transactions (same amount, opposite sign, ≤2 days apart)
+              across different accounts. This helps clean up income/expense reports.
+            </div>
+          </div>
+          <button type="button" className="btn btn-primary" onClick={async () => {
+            const btn = document.activeElement;
+            const origText = btn.innerText;
+            btn.innerText = 'Running…';
+            btn.disabled = true;
+            try {
+              const r = await api.redetectTransfers();
+              alert(`Scan complete. Found ${r.newly_marked} new transfer pairs. ${r.already_marked} were already marked.`);
+            } catch (e) {
+              alert(`Error: ${e.message}`);
+            }
+            btn.innerText = origText;
+            btn.disabled = false;
+          }}>
+            Run →
+          </button>
+        </div>
+      </div>
     </>
   );
 }

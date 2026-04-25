@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from backend.db.database import get_db
 from backend.db.models import Transaction, CategoryRule, AppConfig, Account
 from backend.ingestion.categorizer import categorize_transactions, ai_categorize_batch
+from backend.ingestion.transfer_detector import redetect_transfers_in_db
 
 router = APIRouter()
 
@@ -122,6 +123,27 @@ def reinfer_account_types(db: Session = Depends(get_db)):
             updated += 1
     db.commit()
     return {"status": "ok", "updated": updated, "total": len(accts)}
+
+
+@router.post("/redetect-transfers")
+def redetect_transfers(
+    days: int = Query(None, ge=1, le=3650),
+    db: Session = Depends(get_db),
+):
+    """
+    Re-run internal transfer detection over committed transactions.
+
+    Pairs same-amount / opposite-sign transactions within 2 days across
+    different accounts and marks them category="Transfer". Covers:
+      - Chequing → Savings
+      - Chequing → TFSA / RRSP / FHSA (on-budget → investment)
+      - Credit card payments
+
+    Use ?days=N to limit to recent history; omit to scan all time.
+    Already-Transfer rows are left as-is if they no longer have a counterpart.
+    """
+    result = redetect_transfers_in_db(db, days=days)
+    return {"status": "ok", **result}
 
 
 @router.get("/accounts")

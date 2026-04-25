@@ -53,6 +53,10 @@ export const api = {
   updateAccount: (id, data) => request(`/transactions/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteAccount: (id) => request(`/transactions/accounts/${id}`, { method: 'DELETE' }),
   reinferAccountTypes: () => request('/transactions/accounts/reinfer-types', { method: 'POST' }),
+  redetectTransfers: (days = null) => {
+    const qs = days ? `?days=${days}` : '';
+    return request(`/transactions/redetect-transfers${qs}`, { method: 'POST' });
+  },
   getRecurring: () => request('/transactions/recurring'),
   exportDatabase: () => request('/settings/export'),
 

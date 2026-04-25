@@ -15,9 +15,11 @@ class Settings:
     PASSWORD: str = os.getenv("CLAWFIN_PASSWORD", "")
     SECRET_KEY: str = os.getenv("CLAWFIN_SECRET_KEY", "clawfin-dev-secret-change-me")
     TOKEN_EXPIRE_HOURS: int = int(os.getenv("CLAWFIN_TOKEN_EXPIRE_HOURS", "72"))
+    AUTOMATION_TOKEN: str = os.getenv("CLAWFIN_AUTOMATION_TOKEN", "")
 
     # SimpleFin
     SIMPLEFIN_ACCESS_URL: str = os.getenv("CLAWFIN_SIMPLEFIN_ACCESS_URL", "")
+    SIMPLEFIN_STALE_DAYS: int = int(os.getenv("CLAWFIN_SIMPLEFIN_STALE_DAYS", "3"))
 
     # AI — direct OpenAI-compatible HTTP calls via httpx (no litellm)
     AI_PROVIDER: str = os.getenv("CLAWFIN_AI_PROVIDER", "ollama")  # ollama, openai, anthropic

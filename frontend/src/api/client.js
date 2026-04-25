@@ -37,6 +37,8 @@ export const api = {
 
   // Dashboard
   getDashboard: (days = 30) => request(`/dashboard?days=${days}`),
+  getNetWorth: (period = '1Y') => request(`/dashboard/net-worth?period=${period}`),
+  getCashflowForecast: (months = 3) => request(`/dashboard/cashflow-forecast?months=${months}`),
 
   // Transactions
   getTransactions: (params = {}) => {
@@ -47,14 +49,27 @@ export const api = {
     return request(`/transactions?${qs}`);
   },
   updateTransaction: (id, data) => request(`/transactions/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  getAccounts: () => request('/transactions/accounts'),
+  createAccount: (data) => request('/transactions/accounts', { method: 'POST', body: JSON.stringify(data) }),
+  updateAccount: (id, data) => request(`/transactions/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteAccount: (id) => request(`/transactions/accounts/${id}`, { method: 'DELETE' }),
+  reinferAccountTypes: () => request('/transactions/accounts/reinfer-types', { method: 'POST' }),
+  redetectTransfers: (days = null) => {
+    const qs = days ? `?days=${days}` : '';
+    return request(`/transactions/redetect-transfers${qs}`, { method: 'POST' });
+  },
+  getRecurring: () => request('/transactions/recurring'),
+  exportDatabase: () => request('/settings/export'),
 
   // Holdings
-  getHoldings: () => request('/holdings'),
+  getHoldings: (asOf) => request(asOf ? `/holdings?as_of=${asOf}` : '/holdings'),
+  getHoldingsDates: () => request('/holdings/dates'),
 
   // Import
-  uploadCSV: async (file, bankHint = null) => {
+  uploadCSV: async (file, accountId = null, bankHint = null) => {
     const form = new FormData();
     form.append('file', file);
+    if (accountId) form.append('account_id', accountId);
     if (bankHint) form.append('bank_hint', bankHint);
     const headers = {};
     if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
@@ -69,11 +84,13 @@ export const api = {
     const res = await fetch(`${API_BASE}/import/wealthsimple`, { method: 'POST', headers, body: form });
     return res.json();
   },
+  simpleFinStatus: () => request('/import/simplefin/status'),
   simpleFinSetup: (token) => request('/import/simplefin/setup', { method: 'POST', body: JSON.stringify({ setup_token: token }) }),
   simpleFinSync: () => request('/import/simplefin/sync', { method: 'POST' }),
 
   // Chat
   chat: (message, history = []) => request('/chat', { method: 'POST', body: JSON.stringify({ message, history }) }),
+  chatBriefing: (data) => request('/chat/briefing', { method: 'POST', body: JSON.stringify(data) }),
   chatStream: async function* (message, history = []) {
     const headers = { 'Content-Type': 'application/json' };
     if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
@@ -110,8 +127,20 @@ export const api = {
   deleteCategory: (id) => request(`/settings/categories/${id}`, { method: 'DELETE' }),
   resetCategories: () => request('/settings/categories/reset', { method: 'POST' }),
   getAIConfig: () => request('/settings/ai'),
+  getAIHealth: () => request('/settings/ai/health'),
   getContributionRoom: () => request('/settings/contribution-room'),
   updateContributionRoom: (data) => request('/settings/contribution-room', { method: 'PUT', body: JSON.stringify(data) }),
+
+  // Categorization rules
+  getRules: () => request('/settings/rules'),
+  createRule: (data) => request('/settings/rules', { method: 'POST', body: JSON.stringify(data) }),
+  updateRule: (id, data) => request(`/settings/rules/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteRule: (id) => request(`/settings/rules/${id}`, { method: 'DELETE' }),
+  recategorize: () => request('/transactions/recategorize', { method: 'POST' }),
+
+  // AI categorization toggle
+  getAIFlags: () => request('/settings/ai/flags'),
+  setAIFlags: (data) => request('/settings/ai/flags', { method: 'PUT', body: JSON.stringify(data) }),
 
   setToken: (token) => { authToken = token; localStorage.setItem('clawfin_token', token); },
 };

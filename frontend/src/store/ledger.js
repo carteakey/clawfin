@@ -7,6 +7,20 @@ export const useStore = create((set, get) => ({
   authRequired: null,
   setAuthenticated: (v) => set({ isAuthenticated: v }),
 
+  // Theme
+  theme: document.documentElement.dataset.theme || 'dark',
+  setTheme: (t) => {
+    document.documentElement.dataset.theme = t;
+    localStorage.setItem('clawfin_theme', t);
+    set({ theme: t });
+  },
+  hideBalances: localStorage.getItem('clawfin_hide_balances') === 'true',
+  toggleHideBalances: () => set((s) => {
+    const next = !s.hideBalances;
+    localStorage.setItem('clawfin_hide_balances', String(next));
+    return { hideBalances: next };
+  }),
+
   // Navigation
   currentView: 'dashboard',
   setView: (view) => set({ currentView: view }),
@@ -21,6 +35,8 @@ export const useStore = create((set, get) => ({
   },
 
   // Transactions
+  selectedAccountId: '',
+  setSelectedAccountId: (id) => set({ selectedAccountId: id }),
   transactions: [],
   transactionsTotal: 0,
   transactionsLoading: false,
@@ -33,16 +49,23 @@ export const useStore = create((set, get) => ({
   // Holdings
   holdings: null,
   holdingsLoading: false,
-  fetchHoldings: async () => {
+  fetchHoldings: async (asOf) => {
     set({ holdingsLoading: true });
-    const data = await api.getHoldings();
+    const data = await api.getHoldings(asOf);
     set({ holdings: data, holdingsLoading: false });
   },
+
+  // Command palette
+  paletteOpen: false,
+  openPalette: () => set({ paletteOpen: true }),
+  closePalette: () => set({ paletteOpen: false }),
+  togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
 
   // Chat
   chatOpen: false,
   chatMessages: [],
   chatLoading: false,
+  clearChat: () => set({ chatMessages: [] }),
   toggleChat: () => set((s) => ({ chatOpen: !s.chatOpen })),
   sendMessage: async (message) => {
     const messages = [...get().chatMessages, { role: 'user', content: message }];
@@ -59,6 +82,23 @@ export const useStore = create((set, get) => ({
         fullResponse = resp.response || resp.error || 'No response';
         set({ chatMessages: [...messages, { role: 'assistant', content: fullResponse }] });
       }
+    } catch (e) {
+      set({ chatMessages: [...messages, { role: 'assistant', content: `Error: ${e.message}` }] });
+    }
+    set({ chatLoading: false });
+  },
+  sendBriefing: async ({ period }) => {
+    const label = `${period === 'weekly' ? 'Weekly' : 'Daily'} transaction briefing`;
+    const messages = [...get().chatMessages, { role: 'user', content: label }];
+    set({ chatMessages: messages, chatLoading: true });
+
+    try {
+      const resp = await api.chatBriefing({
+        period,
+        include_transactions: false,
+      });
+      const content = resp.summary || resp.error || 'No briefing generated';
+      set({ chatMessages: [...messages, { role: 'assistant', content }] });
     } catch (e) {
       set({ chatMessages: [...messages, { role: 'assistant', content: `Error: ${e.message}` }] });
     }

@@ -1,12 +1,17 @@
 import { useStore } from '../../store/ledger';
-import { LayoutDashboard, Briefcase, List, Upload, Settings } from 'lucide-react';
 
-const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'holdings', label: 'Holdings', icon: Briefcase },
-  { id: 'transactions', label: 'Transactions', icon: List },
-  { id: 'import', label: 'Import', icon: Upload },
-  { id: 'settings', label: 'Settings', icon: Settings },
+const PRIMARY_NAV = [
+  { id: 'dashboard',    label: 'Dashboard' },
+  { id: 'accounts',     label: 'Accounts' },
+  { id: 'transactions', label: 'Transactions' },
+  { id: 'recurring',    label: 'Recurring' },
+  { id: 'planning',     label: 'Planning' },
+];
+
+const UTILITY_NAV = [
+  { id: 'holdings',     label: 'Holdings' },
+  { id: 'import',       label: 'Import' },
+  { id: 'settings',     label: 'Settings' },
 ];
 
 export default function Sidebar() {
@@ -15,41 +20,43 @@ export default function Sidebar() {
   return (
     <aside className="app-sidebar">
       <div className="logo">
-        <svg className="logo-mark" viewBox="-30 -50 60 96" fill="none">
-          <ellipse cx="0" cy="2" rx="38" ry="38" fill="#1D9E75" opacity="0.10" />
-          <path d="M-18,-36 C-22,-18 -20,4 -16,34" stroke="#1D9E75" strokeWidth="5.5" strokeLinecap="round" />
-          <path d="M-2,-40 C-4,-18 -2,4 0,36" stroke="#1D9E75" strokeWidth="5.5" strokeLinecap="round" />
-          <path d="M14,-36 C18,-18 16,4 12,34" stroke="#1D9E75" strokeWidth="5.5" strokeLinecap="round" />
-          <circle cx="-18" cy="-38" r="3.5" fill="#085041" />
-          <circle cx="-2" cy="-42" r="3.5" fill="#085041" />
-          <circle cx="14" cy="-38" r="3.5" fill="#085041" />
-        </svg>
-        <div className="logo-text">
-          <span>Claw</span><span>Fin</span>
-        </div>
+        <div className="logo-text">ClawFin</div>
       </div>
 
       <nav>
-        <div className="nav-section">
-          <div className="nav-label">Navigation</div>
-          {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
-            <div
-              key={id}
-              className={`nav-item ${currentView === id ? 'active' : ''}`}
-              onClick={() => setView(id)}
-            >
-              <Icon />
-              {label}
-            </div>
-          ))}
-        </div>
+        <div className="nav-label">Nav</div>
+        {PRIMARY_NAV.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            className={`nav-item ${currentView === id ? 'active' : ''}`}
+            onClick={() => setView(id)}
+          >
+            {label}
+          </button>
+        ))}
+
+        <div className="nav-divider" />
+
+        <div className="nav-label">Tools</div>
+        {UTILITY_NAV.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            className={`nav-item ${currentView === id ? 'active' : ''}`}
+            onClick={() => setView(id)}
+          >
+            {label}
+          </button>
+        ))}
       </nav>
 
       <div style={{ flex: 1 }} />
 
-      <div style={{ padding: '0 16px', fontSize: '10px', color: 'var(--text-muted)' }}>
-        <div style={{ fontFamily: 'var(--font-mono)' }}>v0.1.0</div>
-        <div style={{ marginTop: '4px', opacity: 0.6 }}>⌘K to chat</div>
+      <div style={{ padding: '0 16px', fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--ink-3)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+        <div>v0.1.0</div>
+        <div style={{ marginTop: '4px' }}>⌘K · Palette</div>
+        <div style={{ marginTop: '2px' }}>⇧⌘K · Chat</div>
       </div>
     </aside>
   );

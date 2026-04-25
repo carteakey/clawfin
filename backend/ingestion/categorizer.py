@@ -8,9 +8,58 @@ Strategy:
 4. Store results as new CategoryRules for future cache hits
 5. Fall back to rule-based regex if no AI provider configured
 """
+import asyncio
+import json
 import re
 from sqlalchemy.orm import Session
 from backend.db.models import CategoryRule, Category, DEFAULT_CATEGORIES
+
+
+def ai_categorize_batch(merchants: list[str], categories: list[str]) -> dict[str, str]:
+    """
+    Call the configured AI provider to classify merchants.
+    Returns {merchant: category} for merchants the LLM felt confident about.
+    Gracefully returns {} on any error.
+    """
+    from backend.ai import provider
+
+    if not merchants:
+        return {}
+
+    prompt = (
+        "Classify each merchant name into exactly one of the allowed categories. "
+        "Return JSON only, no prose, shaped as {\"merchant\": \"Category\", ...}.\n\n"
+        f"Allowed categories: {', '.join(categories)}\n\n"
+        f"Merchants: {json.dumps(merchants)}"
+    )
+
+    try:
+        resp = asyncio.run(provider.chat_completion(
+            messages=[
+                {"role": "system", "content": "You classify merchant names into finance categories. Return JSON only."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.0,
+        ))
+    except Exception:
+        return {}
+
+    content = (resp.get("content") or "").strip()
+    # Be tolerant of code fences
+    if content.startswith("```"):
+        content = content.split("```", 2)[-1].strip()
+        if content.startswith("json"):
+            content = content[4:].strip()
+        content = content.rsplit("```", 1)[0].strip()
+
+    try:
+        data = json.loads(content)
+    except Exception:
+        return {}
+
+    if not isinstance(data, dict):
+        return {}
+    return {str(k).strip().lower(): str(v) for k, v in data.items() if v in categories}
 
 
 # ─── Rule-based fallback patterns ────────────────────────────────────
@@ -23,13 +72,21 @@ DEFAULT_RULES = [
     # Transit
     (r"presto|uber\s+(?!eats)|lyft|ttc|transit|parking|gas\s*station|petro|shell|esso|canadian\s*tire\s*gas|go\s*transit", "Transit"),
     # Subscriptions
-    (r"netflix|spotify|apple\.com|google\s*(play|storage)|amazon\s*prime|disney|youtube|hbo|crave|audible|dropbox|icloud|microsoft\s*365", "Subscriptions"),
+    (r"netflix|spotify|apple\.com|google\s*(play|storage)|amazon\s*prime|disney|youtube|hbo|crave|audible|dropbox|icloud|microsoft\s*365|github|notion|figma|adobe|chatgpt|openai", "Subscriptions"),
+    # Rent
+    (r"\brent\b|landlord|property\s*management|rentpayment", "Rent"),
     # Housing
-    (r"rent|mortgage|property\s*tax|home\s*depot|ikea|wayfair|structube|canadian\s*tire(?!\s*gas)|rona|lowes", "Housing"),
+    (r"mortgage|property\s*tax|home\s*depot|ikea|wayfair|structube|canadian\s*tire(?!\s*gas)|rona|lowes", "Housing"),
     # Utilities
     (r"hydro|enbridge|toronto\s*hydro|alectra|rogers|bell\s*(?!.*restaurant)|telus|fido|koodo|virgin\s*plus|teksavvy|internet|phone\s*bill", "Utilities"),
+    # Insurance
+    (r"insurance|manulife|sunlife|intact|td\s*insurance|life\s*policy|security\s*national", "Insurance"),
+    # Loan / installments
+    (r"installment|instalment|\bloan\b|\bemi\b|membership\s*fee\s*installment|financ", "Loan"),
+    # Fees
+    (r"\bfee\b|service\s*charge|overdraft|nsf|atm\s*fee|interest\s*charge", "Fees"),
     # Transfer
-    (r"e-?transfer|transfer|payment\s*-\s*thank|autopay|payroll|interac\s*e-?transfer", "Transfer"),
+    (r"e-?transfer|transfer|payment\s*-\s*thank|autopay|interac\s*e-?transfer", "Transfer"),
     # Income
     (r"payroll|salary|direct\s*deposit|employer|tax\s*refund|cerb|ei\s*deposit|gst.*credit|canada\s*child", "Income"),
     # Entertainment

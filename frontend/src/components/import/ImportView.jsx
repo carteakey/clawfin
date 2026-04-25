@@ -1,30 +1,50 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { api } from '../../api/client';
-import { Upload, Link } from 'lucide-react';
+
+const TABS = [
+  { id: 'csv',          label: 'Bank CSV' },
+  { id: 'wealthsimple', label: 'Wealthsimple' },
+  { id: 'simplefin',    label: 'SimpleFin' },
+];
 
 export default function ImportView() {
   const [result, setResult] = useState(null);
   const [importing, setImporting] = useState(false);
-  const [tab, setTab] = useState('csv'); // csv | wealthsimple | simplefin
+  const [tab, setTab] = useState('csv');
   const [dragging, setDragging] = useState(false);
   const [sfToken, setSfToken] = useState('');
+  const [sfStatus, setSfStatus] = useState(null);
+  const [sfAccounts, setSfAccounts] = useState(null);
+  const [targetAccountId, setTargetAccountId] = useState('');
+  const [accounts, setAccounts] = useState([]);
+
+  useEffect(() => {
+    api.getAccounts().then(d => {
+      const list = d.accounts || [];
+      setAccounts(list);
+      if (tab === 'simplefin') {
+        setSfAccounts(list.filter(a => a.source === 'simplefin'));
+      }
+    }).catch(console.error);
+
+    if (tab === 'simplefin') {
+      api.simpleFinStatus().then(setSfStatus).catch(console.error);
+    }
+  }, [tab, result]);
 
   const handleFile = useCallback(async (file) => {
     setImporting(true);
     setResult(null);
     try {
-      let data;
-      if (tab === 'wealthsimple') {
-        data = await api.uploadWealthsimple(file);
-      } else {
-        data = await api.uploadCSV(file);
-      }
+      const data = tab === 'wealthsimple'
+        ? await api.uploadWealthsimple(file)
+        : await api.uploadCSV(file, targetAccountId || null);
       setResult(data);
     } catch (e) {
       setResult({ error: e.message });
     }
     setImporting(false);
-  }, [tab]);
+  }, [tab, targetAccountId]);
 
   const onDrop = useCallback((e) => {
     e.preventDefault();
@@ -42,126 +62,157 @@ export default function ImportView() {
     if (!sfToken.trim()) return;
     setImporting(true);
     try {
-      const data = await api.simpleFinSetup(sfToken.trim());
-      setResult(data);
-    } catch (e) {
-      setResult({ error: e.message });
-    }
+      setResult(await api.simpleFinSetup(sfToken.trim()));
+    } catch (e) { setResult({ error: e.message }); }
     setImporting(false);
   };
 
   const handleSync = async () => {
     setImporting(true);
     try {
-      const data = await api.simpleFinSync();
-      setResult(data);
-    } catch (e) {
-      setResult({ error: e.message });
-    }
+      setResult(await api.simpleFinSync());
+    } catch (e) { setResult({ error: e.message }); }
     setImporting(false);
   };
 
   return (
-    <div className="fade-in">
-      {/* Tab selector */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-        {[
-          { id: 'csv', label: 'Bank CSV', icon: '🏦' },
-          { id: 'wealthsimple', label: 'Wealthsimple', icon: '📈' },
-          { id: 'simplefin', label: 'SimpleFin', icon: '🔗' },
-        ].map(({ id, label, icon }) => (
-          <button key={id} className={`btn ${tab === id ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab(id)}>
-            {icon} {label}
+    <>
+      <div className="section-head">
+        <h2>Import</h2>
+      </div>
+
+      <div className="tabs">
+        {TABS.map(({ id, label }) => (
+          <button key={id} type="button" className={`tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>
+            {label}
           </button>
         ))}
       </div>
 
-      {/* CSV / Wealthsimple drop zone */}
       {(tab === 'csv' || tab === 'wealthsimple') && (
-        <div
-          className={`drop-zone ${dragging ? 'dragging' : ''}`}
-          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={onDrop}
-          onClick={() => document.getElementById('file-input').click()}
-        >
-          <div className="drop-zone-icon"><Upload size={32} /></div>
-          <div className="drop-zone-text">
-            {tab === 'csv' ? 'Drop a bank CSV file here' : 'Drop a Wealthsimple export CSV'}
-          </div>
-          <div className="drop-zone-hint">
-            {tab === 'csv'
-              ? 'Auto-detects TD, RBC, Scotiabank, BMO, CIBC'
-              : 'Supports holdings and activity exports'}
+        <div style={{ maxWidth: 560 }}>
+          {tab === 'csv' && accounts.length > 0 && (
+            <div className="mb-4">
+              <div className="label mb-2">Target Account (Optional)</div>
+              <select
+                value={targetAccountId}
+                onChange={(e) => setTargetAccountId(e.target.value)}
+              >
+                <option value="">AUTO-DETECT OR UNASSIGNED</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.institution} — {a.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div
+            className={`drop-zone ${dragging ? 'dragging' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            onClick={() => document.getElementById('file-input').click()}
+          >
+            Drop CSV Here<br />
+            <span className="muted" style={{ fontSize: 10 }}>
+              {tab === 'csv' ? 'TD · RBC · Scotiabank · BMO · CIBC' : 'Holdings + Activity exports'}
+            </span>
           </div>
           <input id="file-input" type="file" accept=".csv" onChange={onFileInput} style={{ display: 'none' }} />
         </div>
       )}
 
-      {/* SimpleFin setup */}
       {tab === 'simplefin' && (
-        <div className="card" style={{ maxWidth: '500px' }}>
-          <div className="card-title">Connect SimpleFin</div>
-          <p style={{ color: 'var(--text-dim)', fontSize: '13px', marginBottom: '16px' }}>
-            Get your setup token from <a href="https://app.simplefin.org" target="_blank" rel="noreferrer">app.simplefin.org</a>
-          </p>
-          <input
-            placeholder="Paste setup token..."
-            value={sfToken}
-            onChange={(e) => setSfToken(e.target.value)}
-            style={{
-              width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-md)', padding: '8px 12px', color: 'var(--text)',
-              fontSize: '13px', fontFamily: 'var(--font-mono)', marginBottom: '12px', outline: 'none',
-            }}
-          />
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn btn-primary" onClick={handleSimpleFin} disabled={importing}>
-              <Link size={14} /> Connect
-            </button>
-            <button className="btn btn-ghost" onClick={handleSync} disabled={importing}>
-              Sync Now
-            </button>
+        <div className="flex flex-col gap-4">
+          <div className="block" style={{ maxWidth: 560 }}>
+            <div className="block-title">{sfStatus?.is_configured ? 'SimpleFin Connected' : 'Connect SimpleFin'}</div>
+            {!sfStatus?.is_configured && (
+              <p className="muted mb-3" style={{ fontSize: 12 }}>
+                Setup token from{' '}
+                <a href="https://app.simplefin.org" target="_blank" rel="noreferrer">app.simplefin.org</a>
+              </p>
+            )}
+            <input
+              placeholder={sfStatus?.is_configured ? "PASTE NEW SETUP TOKEN TO OVERRIDE" : "PASTE SETUP TOKEN"}
+              value={sfToken}
+              onChange={(e) => setSfToken(e.target.value)}
+              style={{ marginBottom: 'var(--sp-3)' }}
+            />
+            <div className="flex gap-2">
+              <button type="button" className={`btn ${sfStatus?.is_configured ? 'btn-ghost' : 'btn-primary'}`} onClick={handleSimpleFin} disabled={importing || !sfToken.trim()}>
+                {sfStatus?.is_configured ? 'Reconnect' : 'Connect'}
+              </button>
+              {sfStatus?.is_configured && (
+                <button type="button" className="btn btn-primary" onClick={handleSync} disabled={importing}>Sync Now</button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
-
-      {/* Import result */}
-      {importing && <div className="loading" style={{ marginTop: '24px', textAlign: 'center' }}>Importing...</div>}
-      {result && (
-        <div className="card" style={{ marginTop: '24px', maxWidth: '500px' }}>
-          {result.error ? (
-            <div style={{ color: 'var(--negative)' }}>❌ {result.error}</div>
-          ) : (
-            <div>
-              <div style={{ color: 'var(--positive)', marginBottom: '8px' }}>✅ Import complete</div>
-              {result.bank && <div style={{ color: 'var(--text-dim)', fontSize: '12px' }}>Bank: {result.bank}</div>}
-              {result.type && <div style={{ color: 'var(--text-dim)', fontSize: '12px' }}>Type: {result.type}</div>}
-              {result.accounts_synced !== undefined && (
-                <div style={{ color: 'var(--text-dim)', fontSize: '12px' }}>Accounts synced: {result.accounts_synced}</div>
-              )}
-              {result.imported !== undefined && (
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', marginTop: '4px' }}>
-                  {result.imported} imported{result.skipped ? `, ${result.skipped} skipped (duplicates)` : ''}
-                </div>
-              )}
-              {result.access_url && (
-                <div style={{ marginTop: '12px' }}>
-                  <div style={{ color: 'var(--text-dim)', fontSize: '12px', marginBottom: '8px' }}>
-                    Success! To finish setup, add this URL to your <code>.env</code> file as <code>CLAWFIN_SIMPLEFIN_ACCESS_URL</code> and restart the backend.
-                  </div>
-                  <pre style={{
-                    background: 'var(--bg-input)', padding: '8px', border: '1px solid var(--border)',
-                    borderRadius: 'var(--radius-sm)', overflowX: 'auto', fontSize: '12px', color: 'var(--positive)'
-                  }}>
-                    {result.access_url}
-                  </pre>
-                </div>
-              )}
+          
+          {sfAccounts && sfAccounts.length > 0 && (
+            <div className="block" style={{ maxWidth: 560 }}>
+              <div className="block-title">Imported Accounts</div>
+              <table className="dense">
+                <thead>
+                  <tr>
+                    <th>Institution</th>
+                    <th>Account</th>
+                    <th style={{ width: 150 }}>Last Sync</th>
+                    <th style={{ width: 80 }} className="r">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sfAccounts.map(a => (
+                    <tr key={a.id}>
+                      <td>{a.institution}</td>
+                      <td>{a.name}</td>
+                      <td className="muted num" style={{ fontSize: 11 }}>
+                        {a.last_sync_at ? new Date(a.last_sync_at + 'Z').toLocaleString() : 'Never'}
+                      </td>
+                      <td className="r">
+                        {a.stale_reason || a.last_sync_error ? (
+                          <span className="neg" title={a.stale_reason || a.last_sync_error}>Error</span>
+                        ) : (
+                          <span className="pos">OK</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
       )}
-    </div>
+
+      {importing && <div className="loading label mt-4">Importing…</div>}
+
+      {result && (
+        <div className="block mt-4" style={{ maxWidth: 560 }}>
+          {result.error ? (
+            <>
+              <div className="label neg">Error</div>
+              <div className="num" style={{ fontSize: 12, marginTop: 6 }}>{result.error}</div>
+            </>
+          ) : (
+            <>
+              <div className="label pos">Complete</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.8, marginTop: 6 }}>
+                {result.bank && <>BANK · {result.bank}<br /></>}
+                {result.type && <>TYPE · {result.type}<br /></>}
+                {result.accounts_synced !== undefined && <>ACCOUNTS · {result.accounts_synced}<br /></>}
+                {result.imported !== undefined && (
+                  <>IMPORTED · {result.imported}{result.skipped ? ` · SKIPPED · ${result.skipped}` : ''}</>
+                )}
+              </div>
+              {result.access_url && (
+                <div className="mt-4">
+                  <div className="label mb-2">Access URL · Save to .env as CLAWFIN_SIMPLEFIN_ACCESS_URL</div>
+                  <pre style={{ fontFamily: 'var(--font-mono)', fontSize: 11, padding: 'var(--sp-3)', border: '1px solid var(--ink)', overflowX: 'auto', background: 'var(--paper-2)' }}>{result.access_url}</pre>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </>
   );
 }

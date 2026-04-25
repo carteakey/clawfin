@@ -42,6 +42,15 @@ class Account(Base):
     account_type: Mapped[AccountType] = mapped_column(SAEnum(AccountType))
     currency: Mapped[str] = mapped_column(String(3), default="CAD")
     balance: Mapped[float] = mapped_column(Float, default=0.0)
+    available_balance: Mapped[float | None] = mapped_column(Float, nullable=True)
+    balance_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_successful_balance_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_successful_transaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    last_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    simplefin_account_present: Mapped[bool] = mapped_column(Boolean, default=True)
+    stale_reason: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    on_budget: Mapped[bool] = mapped_column(Boolean, default=True)
     source: Mapped[DataSource] = mapped_column(SAEnum(DataSource))
     external_id: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -63,6 +72,8 @@ class Transaction(Base):
     hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     sequence: Mapped[int] = mapped_column(Integer, default=0)  # per-day counter for dedup
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    memo: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pending: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     @staticmethod
@@ -149,16 +160,20 @@ class AppConfig(Base):
 
 # Default categories to seed
 DEFAULT_CATEGORIES = [
-    {"name": "Groceries", "icon": "🛒", "color": "#34D399"},
-    {"name": "Dining", "icon": "🍽️", "color": "#FB923C"},
-    {"name": "Transit", "icon": "🚌", "color": "#60A5FA"},
+    {"name": "Income",        "icon": "💰", "color": "#1D9E75"},
+    {"name": "Rent",          "icon": "🏠", "color": "#F472B6"},
+    {"name": "Housing",       "icon": "🧱", "color": "#E879F9"},
+    {"name": "Utilities",     "icon": "⚡", "color": "#FBBF24"},
+    {"name": "Groceries",     "icon": "🛒", "color": "#34D399"},
+    {"name": "Dining",        "icon": "🍽️", "color": "#FB923C"},
+    {"name": "Transit",       "icon": "🚌", "color": "#60A5FA"},
     {"name": "Subscriptions", "icon": "🔁", "color": "#A78BFA"},
-    {"name": "Housing", "icon": "🏠", "color": "#F472B6"},
-    {"name": "Utilities", "icon": "⚡", "color": "#FBBF24"},
-    {"name": "Transfer", "icon": "↔️", "color": "#6B7280"},
-    {"name": "Income", "icon": "💰", "color": "#1D9E75"},
+    {"name": "Insurance",     "icon": "🛡️", "color": "#94A3B8"},
+    {"name": "Loan",          "icon": "🏦", "color": "#EF4444"},
+    {"name": "Health",        "icon": "💊", "color": "#2DD4BF"},
+    {"name": "Shopping",      "icon": "🛍️", "color": "#F87171"},
     {"name": "Entertainment", "icon": "🎬", "color": "#F87171"},
-    {"name": "Health", "icon": "💊", "color": "#2DD4BF"},
-    {"name": "Shopping", "icon": "🛍️", "color": "#E879F9"},
-    {"name": "Other", "icon": "📦", "color": "#888780"},
+    {"name": "Fees",          "icon": "🧾", "color": "#A1A1AA"},
+    {"name": "Transfer",      "icon": "↔️", "color": "#6B7280"},
+    {"name": "Other",         "icon": "📦", "color": "#888780"},
 ]

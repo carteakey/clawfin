@@ -2,8 +2,25 @@
 import json
 from datetime import date, timedelta
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from backend.db.models import Transaction, Holding, Account, Snapshot, Category
+from sqlalchemy import func, or_
+from backend.ai.briefings import build_transaction_briefing_context
+from backend.db.models import Transaction, Holding, Account, AccountType, Snapshot, Category
+
+INVESTMENT_ACCOUNT_TYPES = {
+    AccountType.TFSA,
+    AccountType.RRSP,
+    AccountType.FHSA,
+    AccountType.MARGIN,
+    AccountType.CRYPTO,
+}
+
+
+def _budget_transaction_query(db: Session):
+    return (
+        db.query(Transaction)
+        .outerjoin(Account, Transaction.account_id == Account.id)
+        .filter(or_(Transaction.account_id.is_(None), Account.account_type.notin_(INVESTMENT_ACCOUNT_TYPES)))
+    )
 
 
 # ─── Tool definitions (OpenAI function-calling format) ───────────────
@@ -85,6 +102,22 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_transaction_briefing_context",
+            "description": "Get weekly transaction briefing context including spending, income, pending/uncategorized counts, unusual spending, recurring activity, and stale account/reconnect nudges.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "period": {"type": "string", "enum": ["weekly"], "description": "Briefing period"},
+                    "include_transactions": {"type": "boolean", "description": "Whether to include recent transaction rows"},
+                    "max_transactions": {"type": "integer", "description": "Maximum transaction rows if included"},
+                },
+                "required": ["period"],
+            },
+        },
+    },
 ]
 
 
@@ -99,6 +132,7 @@ def execute_tool(name: str, arguments: dict, db: Session) -> str:
         "get_net_worth": _get_net_worth,
         "simulate_savings": _simulate_savings,
         "search_transactions": _search_transactions,
+        "get_transaction_briefing_context": _get_transaction_briefing_context,
     }
 
     handler = handlers.get(name)
@@ -115,7 +149,7 @@ def execute_tool(name: str, arguments: dict, db: Session) -> str:
 def _query_spending(db: Session, category: str = None, merchant: str = None,
                     days: int = 30, group_by: str = "category") -> dict:
     cutoff = date.today() - timedelta(days=days)
-    q = db.query(Transaction).filter(Transaction.date >= cutoff, Transaction.amount < 0)
+    q = _budget_transaction_query(db).filter(Transaction.date >= cutoff, Transaction.amount < 0)
 
     if category:
         q = q.filter(Transaction.category == category)
@@ -189,18 +223,18 @@ def _get_holdings(db: Session) -> dict:
 
 def _get_net_worth(db: Session) -> dict:
     accounts = db.query(Account).all()
-    holdings = db.query(Holding).all()
-
     cash_assets = sum(a.balance for a in accounts if a.balance > 0)
     liabilities = abs(sum(a.balance for a in accounts if a.balance < 0))
-    investments = sum(h.market_value for h in holdings)
+    holdings = db.query(Holding).all()
+    holdings_market_value = sum(h.market_value for h in holdings)
 
     return {
         "cash_and_deposits": round(cash_assets, 2),
-        "investments": round(investments, 2),
-        "total_assets": round(cash_assets + investments, 2),
+        "holdings_market_value_separate": round(holdings_market_value, 2),
+        "total_assets": round(cash_assets, 2),
         "liabilities": round(liabilities, 2),
-        "net_worth": round(cash_assets + investments - liabilities, 2),
+        "net_worth": round(cash_assets - liabilities, 2),
+        "note": "Holdings are reported separately and not added to net worth to avoid double-counting synced investment accounts.",
     }
 
 
@@ -228,7 +262,7 @@ def _simulate_savings(db: Session, monthly_amount: float, years: int,
 def _search_transactions(db: Session, merchant: str = None, min_amount: float = None,
                           max_amount: float = None, days: int = 90, limit: int = 20) -> dict:
     cutoff = date.today() - timedelta(days=days)
-    q = db.query(Transaction).filter(Transaction.date >= cutoff)
+    q = _budget_transaction_query(db).filter(Transaction.date >= cutoff)
 
     if merchant:
         q = q.filter(Transaction.merchant.ilike(f"%{merchant}%"))
@@ -246,3 +280,17 @@ def _search_transactions(db: Session, merchant: str = None, min_amount: float = 
             for tx in txs
         ],
     }
+
+
+def _get_transaction_briefing_context(
+    db: Session,
+    period: str,
+    include_transactions: bool = False,
+    max_transactions: int = 25,
+) -> dict:
+    return build_transaction_briefing_context(
+        db,
+        period=period,
+        include_transactions=include_transactions,
+        max_transactions=max_transactions,
+    )

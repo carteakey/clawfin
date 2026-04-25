@@ -244,7 +244,7 @@ def _recurring_activity(db: Session, start: date, end: date) -> dict:
         avg_amount = sum(amounts) / len(amounts)
         last = items[-1]
         row = {
-            "merchant": _merchant_name(last, redact),
+            "merchant": _merchant_name(last),
             "avg_amount": round(abs(avg_amount), 2),
             "cadence_days": int(round(cadence)),
             "last_seen": last.date.isoformat(),

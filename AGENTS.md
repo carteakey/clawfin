@@ -44,6 +44,6 @@ Start from `.env.example`; never commit real secrets. Document new environment v
 
 Briefing and automation endpoints use a separate `CLAWFIN_AUTOMATION_TOKEN`; require the `X-ClawFin-Automation-Token` header for machine-to-machine calls. Do not reuse the UI JWT, SimpleFIN access URL, or AI provider keys in scheduler or LLM prompts.
 
-SimpleFIN sync stores account freshness metadata on `Account`: `last_sync_at`, `last_successful_balance_date`, `last_successful_transaction_date`, `last_sync_error`, `simplefin_account_present`, and `stale_reason`. Preserve these fields when touching sync, account listing, or briefing logic because they drive reconnect nudges.
+SimpleFIN sync stores account freshness metadata on `Account`: `last_sync_at`, `last_successful_balance_date`, `last_successful_transaction_date`, `last_sync_error`, `simplefin_account_present`, and `stale_reason`. Preserve these fields when touching sync, account listing, or briefing logic because they drive reconnect nudges. Stale sync detection is based on `CLAWFIN_SIMPLEFIN_STALE_DAYS`, not transaction activity recency.
 
 External automation/LLM handoff docs live in `docs/briefing-integration-skill.md`. Keep its request/response examples aligned with `/api/briefings/transactions` whenever the briefing API changes.

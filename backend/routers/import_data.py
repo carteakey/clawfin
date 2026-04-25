@@ -307,6 +307,6 @@ def _simplefin_stale_reason(
 
     if not account.last_sync_at:
         return "never_synced"
-    if (today - account.last_sync_at.date()).days >= 3:
+    if (today - account.last_sync_at.date()).days >= settings.SIMPLEFIN_STALE_DAYS:
         return "simplefin_sync_stale"
     return None

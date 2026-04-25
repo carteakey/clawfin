@@ -19,6 +19,7 @@ class Settings:
 
     # SimpleFin
     SIMPLEFIN_ACCESS_URL: str = os.getenv("CLAWFIN_SIMPLEFIN_ACCESS_URL", "")
+    SIMPLEFIN_STALE_DAYS: int = int(os.getenv("CLAWFIN_SIMPLEFIN_STALE_DAYS", "3"))
 
     # AI — direct OpenAI-compatible HTTP calls via httpx (no litellm)
     AI_PROVIDER: str = os.getenv("CLAWFIN_AI_PROVIDER", "ollama")  # ollama, openai, anthropic

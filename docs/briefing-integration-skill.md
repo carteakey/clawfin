@@ -157,5 +157,5 @@ Keep it under 10 short lines and make it suitable for a private notification.
 - `stale_reason: "missing_from_simplefin_response"`: the account previously existed locally but was absent from the latest SimpleFIN response.
 - `stale_reason: "simplefin_auth_error"`: the SimpleFIN access URL or upstream authorization likely needs attention.
 - `stale_reason: "simplefin_sync_error"`: the latest SimpleFIN request failed; retry and inspect backend logs.
-- `stale_reason: "simplefin_sync_stale"`: the account is present, but ClawFin has not recorded a successful SimpleFIN sync for 3 or more days.
+- `stale_reason: "simplefin_sync_stale"`: the account is present, but ClawFin has not recorded a successful SimpleFIN sync within `CLAWFIN_SIMPLEFIN_STALE_DAYS`.
 - `stale_reason: "never_synced"`: the account has no recorded SimpleFIN sync timestamp yet.

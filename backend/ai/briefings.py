@@ -7,6 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.ai import provider
+from backend.config import settings
 from backend.db.models import Account, Transaction
 
 
@@ -303,7 +304,7 @@ def _account_stale_reason(account: Account, sync_days_stale: int | None) -> str 
         return "missing_from_simplefin_response"
     if sync_days_stale is None:
         return "never_synced"
-    if sync_days_stale >= 3:
+    if sync_days_stale >= settings.SIMPLEFIN_STALE_DAYS:
         return "simplefin_sync_stale"
     return None
 

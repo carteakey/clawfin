@@ -14,6 +14,8 @@ from backend.ingestion.dedup import dedup_transactions
 from backend.ingestion.transfer_detector import detect_internal_transfers
 from backend.ingestion.simplefin import SimpleFinClient
 from backend.config import settings
+from backend.db.models import AppConfig
+from backend.security import decrypt_value, encrypt_value
 
 router = APIRouter()
 
@@ -146,25 +148,32 @@ class SimpleFinSetup(BaseModel):
 
 
 @router.post("/simplefin/setup")
-async def simplefin_setup(req: SimpleFinSetup):
+async def simplefin_setup(req: SimpleFinSetup, db: Session = Depends(get_db)):
     try:
         access_url = await SimpleFinClient.exchange_setup_token(req.setup_token)
-        # In production, store encrypted. For now, return it.
-        return {"access_url": access_url, "status": "connected"}
+        row = db.query(AppConfig).filter(AppConfig.key == "simplefin_access_url").first()
+        if row:
+            row.value = encrypt_value(access_url)
+        else:
+            db.add(AppConfig(key="simplefin_access_url", value=encrypt_value(access_url)))
+        db.commit()
+        return {"status": "connected", "is_configured": True}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"SimpleFin setup failed: {str(e)}")
 
 @router.get("/simplefin/status")
-async def simplefin_status():
+async def simplefin_status(db: Session = Depends(get_db)):
+    access_url = _get_simplefin_access_url(db)
     return {
-        "is_configured": bool(settings.SIMPLEFIN_ACCESS_URL)
+        "is_configured": bool(access_url),
+        "source": "env" if settings.SIMPLEFIN_ACCESS_URL else ("database" if access_url else None),
     }
 
 @router.post("/simplefin/sync")
 async def simplefin_sync(db: Session = Depends(get_db)):
-    access_url = settings.SIMPLEFIN_ACCESS_URL
+    access_url = _get_simplefin_access_url(db)
     if not access_url:
-        raise HTTPException(status_code=400, detail="SimpleFin not configured. Set CLAWFIN_SIMPLEFIN_ACCESS_URL.")
+        raise HTTPException(status_code=400, detail="SimpleFin not configured. Connect SimpleFin or set CLAWFIN_SIMPLEFIN_ACCESS_URL.")
 
     client = SimpleFinClient(access_url)
     sync_started_at = datetime.utcnow()
@@ -301,6 +310,15 @@ async def simplefin_sync(db: Session = Depends(get_db)):
             .all()
         ],
     }
+
+
+def _get_simplefin_access_url(db: Session) -> str:
+    if settings.SIMPLEFIN_ACCESS_URL:
+        return settings.SIMPLEFIN_ACCESS_URL
+    row = db.query(AppConfig).filter(AppConfig.key == "simplefin_access_url").first()
+    if not row:
+        return ""
+    return decrypt_value(row.value) or ""
 
 
 def _latest_simplefin_transaction_dates(raw_data: dict) -> dict[str, date]:

@@ -49,6 +49,16 @@ export const api = {
     return request(`/transactions?${qs}`);
   },
   updateTransaction: (id, data) => request(`/transactions/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  createTransaction: (data) => request('/transactions', { method: 'POST', body: JSON.stringify(data) }),
+  deleteTransaction: (id) => request(`/transactions/${id}`, { method: 'DELETE' }),
+  bulkTransactions: (data) => request('/transactions/bulk', { method: 'POST', body: JSON.stringify(data) }),
+  exportTransactionsUrl: (params = {}) => {
+    const cleanParams = Object.fromEntries(
+      Object.entries(params).filter(([_, v]) => v !== undefined && v !== null && v !== '')
+    );
+    const qs = new URLSearchParams(cleanParams).toString();
+    return `${API_BASE}/transactions/export.csv${qs ? `?${qs}` : ''}`;
+  },
   getAccounts: () => request('/transactions/accounts'),
   createAccount: (data) => request('/transactions/accounts', { method: 'POST', body: JSON.stringify(data) }),
   updateAccount: (id, data) => request(`/transactions/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),

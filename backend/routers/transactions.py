@@ -1,8 +1,11 @@
 """Transactions API router."""
+import csv
+import io
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date as dt_date, timedelta
 from statistics import mean, median
 from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from backend.db.database import get_db
@@ -14,14 +17,42 @@ router = APIRouter()
 
 
 class TransactionUpdate(BaseModel):
+    date: dt_date | None = None
+    amount: float | None = None
+    merchant: str | None = None
     category: str | None = None
+    account_id: int | None = None
+    currency: str | None = None
+    memo: str | None = None
+    pending: bool | None = None
     normalized_merchant: str | None = None
     save_rule: bool = False
+
+
+class TransactionCreate(BaseModel):
+    date: dt_date
+    amount: float
+    merchant: str
+    account_id: int
+    category: str = "Other"
+    currency: str = "CAD"
+    memo: str | None = None
+    pending: bool = False
+
+
+class BulkTransactionUpdate(BaseModel):
+    ids: list[int]
+    category: str | None = None
+    delete: bool = False
 
 
 @router.get("")
 def list_transactions(
     days: int = Query(30, ge=1, le=3650),
+    start_date: dt_date = Query(None),
+    end_date: dt_date = Query(None),
+    amount_min: float = Query(None),
+    amount_max: float = Query(None),
     category: str = Query(None),
     account_id: int = Query(None),
     search: str = Query(None),
@@ -30,53 +61,186 @@ def list_transactions(
     include_off_budget: bool = Query(False),
     db: Session = Depends(get_db),
 ):
-    cutoff = date.today() - timedelta(days=days)
-    q = db.query(Transaction).filter(Transaction.date >= cutoff)
+    q = _filtered_transaction_query(
+        db,
+        days=days,
+        start_date=start_date,
+        end_date=end_date,
+        amount_min=amount_min,
+        amount_max=amount_max,
+        category=category,
+        account_id=account_id,
+        search=search,
+        include_off_budget=include_off_budget,
+    )
 
+    total = q.count()
+    txs = q.order_by(Transaction.date.desc(), Transaction.id.desc()).offset(offset).limit(limit).all()
+    return {"total": total, "transactions": _serialize_transactions(txs, db)}
+
+
+@router.get("/export.csv")
+def export_transactions_csv(
+    days: int = Query(30, ge=1, le=3650),
+    start_date: dt_date = Query(None),
+    end_date: dt_date = Query(None),
+    amount_min: float = Query(None),
+    amount_max: float = Query(None),
+    category: str = Query(None),
+    account_id: int = Query(None),
+    search: str = Query(None),
+    include_off_budget: bool = Query(False),
+    db: Session = Depends(get_db),
+):
+    txs = (
+        _filtered_transaction_query(
+            db,
+            days=days,
+            start_date=start_date,
+            end_date=end_date,
+            amount_min=amount_min,
+            amount_max=amount_max,
+            category=category,
+            account_id=account_id,
+            search=search,
+            include_off_budget=include_off_budget,
+        )
+        .order_by(Transaction.date.desc(), Transaction.id.desc())
+        .all()
+    )
+    rows = _serialize_transactions(txs, db)
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=[
+        "id", "date", "amount", "merchant", "normalized_merchant", "category",
+        "account_id", "account_name", "account_institution", "currency", "memo",
+        "pending", "source",
+    ])
+    writer.writeheader()
+    writer.writerows(rows)
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=clawfin-ledger.csv"},
+    )
+
+
+def _filtered_transaction_query(
+    db: Session,
+    days: int,
+    start_date: dt_date | None = None,
+    end_date: dt_date | None = None,
+    amount_min: float | None = None,
+    amount_max: float | None = None,
+    category: str | None = None,
+    account_id: int | None = None,
+    search: str | None = None,
+    include_off_budget: bool = False,
+):
+    cutoff = start_date or (dt_date.today() - timedelta(days=days))
+    q = db.query(Transaction).filter(Transaction.date >= cutoff)
+    if end_date:
+        q = q.filter(Transaction.date <= end_date)
+    if amount_min is not None:
+        q = q.filter(Transaction.amount >= amount_min)
+    if amount_max is not None:
+        q = q.filter(Transaction.amount <= amount_max)
     if not include_off_budget:
         from sqlalchemy import or_
         q = q.outerjoin(Account, Transaction.account_id == Account.id).filter(
             or_(Transaction.account_id.is_(None), Account.on_budget.is_(True))
         )
-
     if category:
         q = q.filter(Transaction.category == category)
     if account_id:
         q = q.filter(Transaction.account_id == account_id)
     if search:
-        q = q.filter(Transaction.merchant.ilike(f"%{search}%"))
+        needle = f"%{search}%"
+        q = q.filter(Transaction.merchant.ilike(needle))
+    return q
 
-    total = q.count()
-    txs = q.order_by(Transaction.date.desc()).offset(offset).limit(limit).all()
 
+def _serialize_transactions(txs: list[Transaction], db: Session) -> list[dict]:
     # Enrich with account name in one shot
     acct_ids = {tx.account_id for tx in txs if tx.account_id}
     accounts = (
         {a.id: a for a in db.query(Account).filter(Account.id.in_(acct_ids)).all()}
         if acct_ids else {}
     )
+    return [
+        {
+            "id": tx.id,
+            "date": tx.date.isoformat(),
+            "amount": tx.amount,
+            "merchant": tx.merchant,
+            "normalized_merchant": tx.normalized_merchant,
+            "category": tx.category,
+            "account_id": tx.account_id,
+            "account_name": accounts[tx.account_id].name if tx.account_id in accounts else None,
+            "account_institution": accounts[tx.account_id].institution if tx.account_id in accounts else None,
+            "currency": tx.currency,
+            "memo": tx.memo,
+            "pending": bool(tx.pending),
+            "source": tx.source.value if tx.source else None,
+        }
+        for tx in txs
+    ]
 
-    return {
-        "total": total,
-        "transactions": [
-            {
-                "id": tx.id,
-                "date": tx.date.isoformat(),
-                "amount": tx.amount,
-                "merchant": tx.merchant,
-                "normalized_merchant": tx.normalized_merchant,
-                "category": tx.category,
-                "account_id": tx.account_id,
-                "account_name": accounts[tx.account_id].name if tx.account_id in accounts else None,
-                "account_institution": accounts[tx.account_id].institution if tx.account_id in accounts else None,
-                "currency": tx.currency,
-                "memo": tx.memo,
-                "pending": bool(tx.pending),
-                "source": tx.source.value if tx.source else None,
-            }
-            for tx in txs
-        ]
-    }
+
+def _manual_account(db: Session, account_id: int) -> Account:
+    account = db.query(Account).filter(Account.id == account_id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if account.source != DataSource.MANUAL:
+        raise HTTPException(status_code=400, detail="Manual transactions must use a manual account")
+    return account
+
+
+def _next_hash(
+    db: Session,
+    tx_date: dt_date,
+    amount: float,
+    merchant: str,
+    account_id: int | None,
+    exclude_id: int | None = None,
+) -> tuple[str, int]:
+    sequence = 0
+    while True:
+        tx_hash = Transaction.compute_hash(tx_date, amount, merchant, account_id, sequence)
+        q = db.query(Transaction.id).filter(Transaction.hash == tx_hash)
+        if exclude_id is not None:
+            q = q.filter(Transaction.id != exclude_id)
+        exists = q.first()
+        if not exists:
+            return tx_hash, sequence
+        sequence += 1
+
+
+@router.post("")
+def create_transaction(req: TransactionCreate, db: Session = Depends(get_db)):
+    account = _manual_account(db, req.account_id)
+    merchant = req.merchant.strip()
+    if not merchant:
+        raise HTTPException(status_code=422, detail="Merchant is required")
+    tx_hash, sequence = _next_hash(db, req.date, req.amount, merchant, account.id)
+    tx = Transaction(
+        date=req.date,
+        amount=req.amount,
+        merchant=merchant,
+        normalized_merchant=merchant,
+        category=req.category or "Other",
+        account_id=account.id,
+        source=DataSource.MANUAL,
+        currency=(req.currency or account.currency or "CAD").upper(),
+        hash=tx_hash,
+        sequence=sequence,
+        memo=req.memo,
+        pending=req.pending,
+    )
+    db.add(tx)
+    db.commit()
+    db.refresh(tx)
+    return {"status": "created", "transaction": _serialize_transactions([tx], db)[0]}
 
 
 @router.patch("/{tx_id}")
@@ -84,6 +248,30 @@ def update_transaction(tx_id: int, update: TransactionUpdate, db: Session = Depe
     tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
+
+    if any(v is not None for v in [update.date, update.amount, update.merchant, update.account_id, update.currency, update.memo, update.pending]):
+        if tx.source != DataSource.MANUAL:
+            raise HTTPException(status_code=400, detail="Only manual transactions can be edited beyond category")
+
+    if update.account_id is not None:
+        _manual_account(db, update.account_id)
+        tx.account_id = update.account_id
+    if update.date is not None:
+        tx.date = update.date
+    if update.amount is not None:
+        tx.amount = update.amount
+    if update.merchant is not None:
+        merchant = update.merchant.strip()
+        if not merchant:
+            raise HTTPException(status_code=422, detail="Merchant is required")
+        tx.merchant = merchant
+        tx.normalized_merchant = merchant
+    if update.currency is not None:
+        tx.currency = update.currency.upper()
+    if update.memo is not None:
+        tx.memo = update.memo
+    if update.pending is not None:
+        tx.pending = update.pending
 
     if update.category is not None:
         tx.category = update.category
@@ -98,8 +286,47 @@ def update_transaction(tx_id: int, update: TransactionUpdate, db: Session = Depe
     if update.normalized_merchant is not None:
         tx.normalized_merchant = update.normalized_merchant
 
+    if tx.source == DataSource.MANUAL:
+        tx.hash, tx.sequence = _next_hash(db, tx.date, tx.amount, tx.merchant, tx.account_id, exclude_id=tx.id)
+
     db.commit()
     return {"status": "ok", "id": tx_id}
+
+
+@router.delete("/{tx_id}")
+def delete_transaction(tx_id: int, db: Session = Depends(get_db)):
+    tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    if tx.source != DataSource.MANUAL:
+        raise HTTPException(status_code=400, detail="Only manual transactions can be deleted")
+    db.delete(tx)
+    db.commit()
+    return {"status": "deleted", "id": tx_id}
+
+
+@router.post("/bulk")
+def bulk_update_transactions(req: BulkTransactionUpdate, db: Session = Depends(get_db)):
+    ids = sorted(set(req.ids))
+    if not ids:
+        raise HTTPException(status_code=422, detail="No transactions selected")
+    txs = db.query(Transaction).filter(Transaction.id.in_(ids)).all()
+    if len(txs) != len(ids):
+        raise HTTPException(status_code=404, detail="One or more transactions were not found")
+    if req.delete:
+        non_manual = [tx.id for tx in txs if tx.source != DataSource.MANUAL]
+        if non_manual:
+            raise HTTPException(status_code=400, detail="Bulk delete is limited to manual transactions")
+        for tx in txs:
+            db.delete(tx)
+        db.commit()
+        return {"status": "deleted", "count": len(txs)}
+    if req.category:
+        for tx in txs:
+            tx.category = req.category
+        db.commit()
+        return {"status": "updated", "count": len(txs)}
+    raise HTTPException(status_code=422, detail="No bulk action requested")
 
 
 @router.post("/accounts/reinfer-types")
@@ -216,7 +443,7 @@ def list_recurring(db: Session = Depends(get_db)):
     Heuristic: same normalized merchant, ≥3 occurrences in last 180 days,
     stable amount (±15%), cadence 5-45 days. Classifies each.
     """
-    lookback = date.today() - timedelta(days=180)
+    lookback = dt_date.today() - timedelta(days=180)
     from backend.routers.dashboard import _budget_transaction_query
     txs = (
         _budget_transaction_query(db)

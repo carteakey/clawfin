@@ -71,7 +71,9 @@ def _get_provider_config(db=None) -> dict:
 
 
 def _provider_overrides(db, app_config_model) -> dict:
-    return {
+    from backend.security import decrypt_value
+
+    overrides = {
         row.key: row.value
         for row in db.query(app_config_model).filter(
             app_config_model.key.in_([
@@ -82,6 +84,9 @@ def _provider_overrides(db, app_config_model) -> dict:
             ])
         ).all()
     }
+    if overrides.get("ai_api_key_override"):
+        overrides["ai_api_key_override"] = decrypt_value(overrides["ai_api_key_override"])
+    return overrides
 
 
 # ─── Chat completion (non-streaming) ────────────────────────────────
@@ -201,6 +206,8 @@ async def _ollama_completion(config, messages, tools, temperature):
         "stream": False,
         "options": {"temperature": temperature},
     }
+    if not tools and _looks_like_json_task(messages):
+        body["format"] = "json"
     if tools:
         body["tools"] = tools  # Ollama supports OpenAI tool format
 
@@ -242,6 +249,11 @@ async def _ollama_stream(config, messages, tools, temperature):
                     content = chunk.get("message", {}).get("content", "")
                     if content:
                         yield content
+
+
+def _looks_like_json_task(messages: list[dict]) -> bool:
+    text = "\n".join(str(m.get("content", "")) for m in messages[-2:]).lower()
+    return "return json" in text or "json only" in text
 
 
 # ─── Anthropic format (translation layer) ────────────────────────────

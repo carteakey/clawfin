@@ -452,8 +452,8 @@ function RulesPanel() {
 
   useEffect(() => { load(); }, []);
 
-  const updateRule = async (id, category) => {
-    await api.updateRule(id, { category });
+  const updateRule = async (id, patch) => {
+    await api.updateRule(id, patch);
     load();
   };
 
@@ -507,8 +507,6 @@ function RulesPanel() {
               <tr>
                 <th>Pattern (Merchant)</th>
                 <th style={{ width: 200 }}>Category</th>
-                <th style={{ width: 80 }} className="r">Priority</th>
-                <th style={{ width: 80 }} className="r">Regex</th>
                 <th style={{ width: 80 }}></th>
               </tr>
             </thead>
@@ -519,7 +517,7 @@ function RulesPanel() {
                   <td>
                     <select
                       value={r.category}
-                      onChange={(e) => updateRule(r.id, e.target.value)}
+                      onChange={(e) => updateRule(r.id, { category: e.target.value })}
                       style={{ border: 'none', padding: '2px 4px' }}
                     >
                       {categories.map((c) => (
@@ -527,8 +525,6 @@ function RulesPanel() {
                       ))}
                     </select>
                   </td>
-                  <td className="num r muted">{r.priority}</td>
-                  <td className="num r muted">{r.is_regex ? 'Y' : '—'}</td>
                   <td>
                     <button type="button" className="btn btn-ghost" onClick={() => deleteRule(r.id)}>Del</button>
                   </td>

@@ -63,6 +63,7 @@ export default function ImportView() {
     setImporting(true);
     try {
       setResult(await api.simpleFinSetup(sfToken.trim()));
+      setSfToken('');
     } catch (e) { setResult({ error: e.message }); }
     setImporting(false);
   };
@@ -129,6 +130,11 @@ export default function ImportView() {
               <p className="muted mb-3" style={{ fontSize: 12 }}>
                 Setup token from{' '}
                 <a href="https://app.simplefin.org" target="_blank" rel="noreferrer">app.simplefin.org</a>
+              </p>
+            )}
+            {sfStatus?.is_configured && (
+              <p className="muted mb-3" style={{ fontSize: 12 }}>
+                Stored credential source: {sfStatus.source || 'configured'}.
               </p>
             )}
             <input
@@ -203,12 +209,7 @@ export default function ImportView() {
                   <>IMPORTED · {result.imported}{result.skipped ? ` · SKIPPED · ${result.skipped}` : ''}</>
                 )}
               </div>
-              {result.access_url && (
-                <div className="mt-4">
-                  <div className="label mb-2">Access URL · Save to .env as CLAWFIN_SIMPLEFIN_ACCESS_URL</div>
-                  <pre style={{ fontFamily: 'var(--font-mono)', fontSize: 11, padding: 'var(--sp-3)', border: '1px solid var(--ink)', overflowX: 'auto', background: 'var(--paper-2)' }}>{result.access_url}</pre>
-                </div>
-              )}
+              {result.status === 'connected' && <div className="muted mt-4" style={{ fontSize: 12 }}>SimpleFin access URL stored encrypted.</div>}
             </>
           )}
         </div>

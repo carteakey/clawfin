@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from backend.config import settings as app_settings
 from backend.db.database import get_db
 from backend.db.models import Category, CategoryRule, AppConfig, DEFAULT_CATEGORIES
+from backend.security import encrypt_value
 
 router = APIRouter()
 
@@ -125,6 +126,8 @@ def _set_override(db: Session, key: str, value: str | None):
         if row:
             db.delete(row)
         return
+    if key in {"ai_api_key_override", "simplefin_access_url"}:
+        value = encrypt_value(value)
     if row:
         row.value = value
     else:
@@ -253,8 +256,6 @@ def list_rules(db: Session = Depends(get_db)):
 
 class RuleUpdate(BaseModel):
     category: str | None = None
-    priority: int | None = None
-    pattern: str | None = None
 
 
 @router.patch("/rules/{rule_id}")
@@ -264,10 +265,6 @@ def update_rule(rule_id: int, req: RuleUpdate, db: Session = Depends(get_db)):
         return {"error": "Rule not found"}
     if req.category is not None:
         r.category = req.category
-    if req.priority is not None:
-        r.priority = req.priority
-    if req.pattern is not None:
-        r.pattern = req.pattern
     db.commit()
     return {"status": "updated", "id": rule_id}
 

@@ -577,6 +577,23 @@ table.dense .r { text-align: right; }
 .btn[disabled] { opacity: 0.4; cursor: not-allowed; }
 .btn[disabled]:hover { background: var(--paper); color: var(--ink); }
 
+.icon-btn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rule-2);
+  color: var(--ink-2);
+  background: var(--paper);
+}
+
+.icon-btn:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+  background: var(--hover);
+}
+
 /* ── Inputs ──────────────────────────────────────────────────────── */
 .input, input[type="text"], input[type="password"], input[type="number"], input[type="search"], select, textarea {
   display: block;
@@ -1055,6 +1072,80 @@ kbd {
   margin-left: 4px;
 }
 
+/* ── Ledger controls ─────────────────────────────────────────────── */
+.ledger-toolbar {
+  display: grid;
+  grid-template-columns: repeat(4, auto) minmax(150px, 180px) repeat(4, minmax(120px, 1fr)) minmax(180px, 1.4fr) auto auto auto;
+  gap: var(--sp-2);
+  align-items: center;
+  margin-bottom: var(--sp-4);
+}
+
+.ledger-toolbar input,
+.ledger-toolbar select {
+  min-width: 0;
+}
+
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border: 1px solid var(--ink);
+  border-bottom: none;
+  background: var(--accent-tint);
+}
+
+.ledger-table input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+}
+
+.merchant-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-weight: 500;
+}
+
+.pending-label {
+  font-size: 8px;
+  padding: 1px 4px;
+  background: var(--paper-2);
+}
+
+.row-actions {
+  display: flex;
+  gap: var(--sp-1);
+  justify-content: flex-end;
+}
+
+.ledger-form {
+  max-width: 960px;
+  display: grid;
+  grid-template-columns: 150px minmax(180px, 1fr) 120px minmax(180px, 1fr) 160px 80px minmax(160px, 1fr) auto;
+  gap: var(--sp-2);
+  align-items: end;
+}
+
+.ledger-form .block-title {
+  grid-column: 1 / -1;
+}
+
+.form-actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+}
+
 /* ── Kind badges (recurring classification) ──────────────────────── */
 .kind-badge {
   display: inline-block;
@@ -1108,4 +1199,90 @@ table.dense th.sorted.desc::after { content: '↓'; color: var(--accent); opacit
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
+}
+
+@media (max-width: 900px) {
+  :root {
+    --sidebar-w: 100%;
+    --header-h: 48px;
+  }
+
+  .app-shell {
+    display: block;
+  }
+
+  .app-header {
+    position: sticky;
+    top: 0;
+    padding: 0 var(--sp-3);
+  }
+
+  .app-header .hdr-strip {
+    gap: var(--sp-3);
+    overflow-x: auto;
+    max-width: 60vw;
+  }
+
+  .app-sidebar {
+    border-right: none;
+    border-bottom: 1px solid var(--ink);
+    padding: var(--sp-2) 0;
+    max-height: none;
+  }
+
+  .logo {
+    padding: 0 var(--sp-3) var(--sp-2);
+    margin-bottom: var(--sp-2);
+  }
+
+  .app-sidebar nav {
+    display: flex;
+    overflow-x: auto;
+    gap: var(--sp-1);
+    padding: 0 var(--sp-2);
+  }
+
+  .nav-label,
+  .nav-divider,
+  .app-sidebar > div:last-child {
+    display: none;
+  }
+
+  .nav-item {
+    width: auto;
+    white-space: nowrap;
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    padding: var(--sp-2) var(--sp-3);
+  }
+
+  .nav-item.active {
+    border-left-color: transparent;
+    border-bottom-color: var(--accent);
+  }
+
+  .app-main {
+    padding: var(--sp-3);
+    max-width: none;
+  }
+
+  .ledger-toolbar,
+  .ledger-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .ledger-toolbar .toggle,
+  .ledger-toolbar input[type="search"],
+  .form-actions {
+    grid-column: 1 / -1;
+  }
+
+  .tabs {
+    overflow-x: auto;
+  }
+
+  .chat-panel {
+    width: 100vw;
+  }
+
 }

@@ -6,19 +6,36 @@ import { BarChart, Bar, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import Waterfall from './Waterfall';
 
 const PERIODS = [
-  { d: 7,   l: '7D' },
-  { d: 30,  l: '30D' },
-  { d: 90,  l: '90D' },
-  { d: 365, l: '1Y' },
+  { key: '7', d: 7, l: '7D' },
+  { key: '30', d: 30, l: '30D' },
+  { key: '90', d: 90, l: '90D' },
+  { key: 'last_month', l: 'Last Month' },
+  { key: '365', d: 365, l: '1Y' },
 ];
+
+function dateInputValue(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function lastMonthRange() {
+  const now = new Date();
+  const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const last = new Date(now.getFullYear(), now.getMonth(), 0);
+  return { start_date: dateInputValue(first), end_date: dateInputValue(last), days: 3650 };
+}
 
 export default function Dashboard() {
   const { dashboard, dashboardLoading, fetchDashboard } = useStore();
   const hideBalances = useStore((s) => s.hideBalances);
-  const [days, setDays] = useState(30);
+  const [period, setPeriod] = useState(PERIODS[1]);
   const [categoryColors, setCategoryColors] = useState({});
 
-  useEffect(() => { fetchDashboard(days); }, [days]);
+  useEffect(() => {
+    fetchDashboard(period.key === 'last_month' ? lastMonthRange() : period.d);
+  }, [period]);
 
   useEffect(() => {
     api.getCategories().then((d) => {
@@ -54,14 +71,14 @@ export default function Dashboard() {
 
       {/* Period selector */}
       <div className="flex gap-2 mb-4">
-        {PERIODS.map(({ d, l }) => (
+        {PERIODS.map((p) => (
           <button
-            key={d}
+            key={p.key}
             type="button"
-            className={`btn ${d === days ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setDays(d)}
+            className={`btn ${p.key === period.key ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setPeriod(p)}
           >
-            {l}
+            {p.l}
           </button>
         ))}
       </div>
@@ -83,7 +100,7 @@ export default function Dashboard() {
       <div className="section">
         <div className="section-head">
           <h2>Cash Flow</h2>
-          <span className="label num">{days}d window</span>
+          <span className="label num">{period.key === 'last_month' ? 'last calendar month' : `${dashboard.period_days || period.d}d window`}</span>
         </div>
         <Waterfall income={kpis.income} breakdown={spending_breakdown} categoryColors={categoryColors} />
       </div>

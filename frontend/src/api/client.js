@@ -36,7 +36,14 @@ export const api = {
   login: (password) => request('/auth/login', { method: 'POST', body: JSON.stringify({ password }) }),
 
   // Dashboard
-  getDashboard: (days = 30) => request(`/dashboard?days=${days}`),
+  getDashboard: (params = 30) => {
+    const query = typeof params === 'object'
+      ? new URLSearchParams(Object.fromEntries(
+        Object.entries(params).filter(([_, v]) => v !== undefined && v !== null && v !== '')
+      )).toString()
+      : new URLSearchParams({ days: params }).toString();
+    return request(`/dashboard?${query}`);
+  },
   getNetWorth: (period = '1Y') => request(`/dashboard/net-worth?period=${period}`),
   getCashflowForecast: (months = 3) => request(`/dashboard/cashflow-forecast?months=${months}`),
 

@@ -38,13 +38,20 @@ def _budget_transaction_query(db: Session):
 @router.get("")
 def get_dashboard(
     days: int = Query(30, ge=1, le=3650),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
     db: Session = Depends(get_db),
 ):
-    cutoff = date.today() - timedelta(days=days)
-    prev_cutoff = cutoff - timedelta(days=days)
+    cutoff = start_date or (date.today() - timedelta(days=days))
+    period_end = end_date or date.today()
+    window_days = max(1, (period_end - cutoff).days + 1)
+    prev_cutoff = cutoff - timedelta(days=window_days)
 
     # Current period transactions
-    txs = _budget_transaction_query(db).filter(Transaction.date >= cutoff).all()
+    txs = _budget_transaction_query(db).filter(
+        Transaction.date >= cutoff,
+        Transaction.date <= period_end,
+    ).all()
     prev_txs = _budget_transaction_query(db).filter(
         Transaction.date >= prev_cutoff, Transaction.date < cutoff
     ).all()
@@ -118,7 +125,9 @@ def get_dashboard(
             daily_spending[day] += abs(tx.amount)
 
     return {
-        "period_days": days,
+        "period_days": window_days,
+        "start_date": cutoff.isoformat(),
+        "end_date": period_end.isoformat(),
         "kpis": {
             "income": round(income, 2),
             "expenses": round(expenses, 2),

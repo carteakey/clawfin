@@ -28,9 +28,9 @@ export const useStore = create((set, get) => ({
   // Dashboard
   dashboard: null,
   dashboardLoading: false,
-  fetchDashboard: async (days = 30) => {
+  fetchDashboard: async (params = 30) => {
     set({ dashboardLoading: true });
-    const data = await api.getDashboard(days);
+    const data = await api.getDashboard(params);
     set({ dashboard: data, dashboardLoading: false });
   },
 

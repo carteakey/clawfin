@@ -5,10 +5,11 @@ import { api } from '../../api/client';
 import { formatCurrency, formatDate } from '../../utils/format';
 
 const PERIODS = [
-  { d: 30,   l: '30D' },
-  { d: 90,   l: '90D' },
-  { d: 365,  l: '1Y' },
-  { d: 3650, l: 'All' },
+  { key: '30', d: 30, l: '30D' },
+  { key: '90', d: 90, l: '90D' },
+  { key: '365', d: 365, l: '1Y' },
+  { key: 'last_month', l: 'Last Month' },
+  { key: 'all', d: 3650, l: 'All' },
 ];
 
 const PAGE_SIZE = 100;
@@ -22,9 +23,24 @@ const emptyForm = {
   memo: '',
 };
 
+function dateInputValue(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function lastMonthRange() {
+  const now = new Date();
+  const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const last = new Date(now.getFullYear(), now.getMonth(), 0);
+  return { start: dateInputValue(first), end: dateInputValue(last) };
+}
+
 export default function Transactions() {
   const { transactions, transactionsTotal, transactionsLoading, fetchTransactions, selectedAccountId, setSelectedAccountId, setView } = useStore();
   const [days, setDays] = useState(30);
+  const [periodKey, setPeriodKey] = useState('30');
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [accountId, setAccountId] = useState(selectedAccountId || '');
@@ -232,8 +248,24 @@ export default function Transactions() {
 
   const sortCls = (by) => (sort.by === by ? `sortable sorted ${sort.dir}` : 'sortable');
 
+  const setPeriod = (period) => {
+    setPeriodKey(period.key);
+    setPage(0);
+    if (period.key === 'last_month') {
+      const { start, end } = lastMonthRange();
+      setStartDate(start);
+      setEndDate(end);
+      setDays(3650);
+      return;
+    }
+    setDays(period.d);
+    setStartDate('');
+    setEndDate('');
+  };
+
   const clearFilters = () => {
     setDays(30);
+    setPeriodKey('30');
     setSearch('');
     setCategory('');
     setAccountId('');
@@ -291,17 +323,17 @@ export default function Transactions() {
       )}
 
       <div className="ledger-toolbar">
-        {PERIODS.map(({ d, l }) => (
-          <button key={d} type="button" className={`btn ${d === days ? 'btn-primary' : 'btn-ghost'}`} onClick={() => { setDays(d); setPage(0); }}>
-            {l}
+        {PERIODS.map((period) => (
+          <button key={period.key} type="button" className={`btn ${period.key === periodKey ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setPeriod(period)}>
+            {period.l}
           </button>
         ))}
         <select value={category} onChange={(e) => { setCategory(e.target.value); setPage(0); }} aria-label="Category filter">
           <option value="">ALL CATEGORIES</option>
           {categories.map((c) => <option key={c.id} value={c.name}>{c.icon ? `${c.icon} ` : ''}{c.name}</option>)}
         </select>
-        <input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setPage(0); }} aria-label="Start date" />
-        <input type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setPage(0); }} aria-label="End date" />
+        <input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setPeriodKey('custom'); setPage(0); }} aria-label="Start date" />
+        <input type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setPeriodKey('custom'); setPage(0); }} aria-label="End date" />
         <input type="number" placeholder="MIN $" value={amountMin} onChange={(e) => { setAmountMin(e.target.value); setPage(0); }} />
         <input type="number" placeholder="MAX $" value={amountMax} onChange={(e) => { setAmountMax(e.target.value); setPage(0); }} />
         <input type="search" placeholder="SEARCH MERCHANTS..." value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && refresh()} />

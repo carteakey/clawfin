@@ -1,19 +1,30 @@
 """Transactions API router."""
 import csv
 import io
+import uuid
 from collections import defaultdict
 from datetime import date as dt_date, timedelta
 from statistics import mean, median
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from backend.db.database import get_db
+from backend.db.database import SessionLocal, get_db
 from backend.db.models import Transaction, CategoryRule, AppConfig, Account, AccountType, DataSource
 from backend.ingestion.categorizer import categorize_transactions, ai_categorize_batch
 from backend.ingestion.transfer_detector import redetect_transfers_in_db
 
 router = APIRouter()
+RECATEGORIZE_JOBS: dict[str, dict] = {}
+SORT_COLUMNS = {
+    "date": Transaction.date,
+    "merchant": Transaction.merchant,
+    "category": Transaction.category,
+    "amount": Transaction.amount,
+    "account": Account.name,
+    "account_name": Account.name,
+    "source": Transaction.source,
+}
 
 
 class TransactionUpdate(BaseModel):
@@ -58,6 +69,8 @@ def list_transactions(
     search: str = Query(None),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
+    sort_by: str = Query("date"),
+    sort_dir: str = Query("desc"),
     include_off_budget: bool = Query(False),
     db: Session = Depends(get_db),
 ):
@@ -75,7 +88,7 @@ def list_transactions(
     )
 
     total = q.count()
-    txs = q.order_by(Transaction.date.desc(), Transaction.id.desc()).offset(offset).limit(limit).all()
+    txs = _apply_transaction_sort(q, sort_by, sort_dir).offset(offset).limit(limit).all()
     return {"total": total, "transactions": _serialize_transactions(txs, db)}
 
 
@@ -89,10 +102,12 @@ def export_transactions_csv(
     category: str = Query(None),
     account_id: int = Query(None),
     search: str = Query(None),
+    sort_by: str = Query("date"),
+    sort_dir: str = Query("desc"),
     include_off_budget: bool = Query(False),
     db: Session = Depends(get_db),
 ):
-    txs = (
+    q = (
         _filtered_transaction_query(
             db,
             days=days,
@@ -105,9 +120,8 @@ def export_transactions_csv(
             search=search,
             include_off_budget=include_off_budget,
         )
-        .order_by(Transaction.date.desc(), Transaction.id.desc())
-        .all()
     )
+    txs = _apply_transaction_sort(q, sort_by, sort_dir).all()
     rows = _serialize_transactions(txs, db)
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=[
@@ -138,7 +152,7 @@ def _filtered_transaction_query(
     include_off_budget: bool = False,
 ):
     cutoff = start_date or (dt_date.today() - timedelta(days=days))
-    q = db.query(Transaction).filter(Transaction.date >= cutoff)
+    q = db.query(Transaction).outerjoin(Account, Transaction.account_id == Account.id).filter(Transaction.date >= cutoff)
     if end_date:
         q = q.filter(Transaction.date <= end_date)
     if amount_min is not None:
@@ -147,7 +161,7 @@ def _filtered_transaction_query(
         q = q.filter(Transaction.amount <= amount_max)
     if not include_off_budget:
         from sqlalchemy import or_
-        q = q.outerjoin(Account, Transaction.account_id == Account.id).filter(
+        q = q.filter(
             or_(Transaction.account_id.is_(None), Account.on_budget.is_(True))
         )
     if category:
@@ -158,6 +172,12 @@ def _filtered_transaction_query(
         needle = f"%{search}%"
         q = q.filter(Transaction.merchant.ilike(needle))
     return q
+
+
+def _apply_transaction_sort(q, sort_by: str, sort_dir: str):
+    col = SORT_COLUMNS.get((sort_by or "").lower(), Transaction.date)
+    ordered = col.asc() if (sort_dir or "").lower() == "asc" else col.desc()
+    return q.order_by(ordered, Transaction.id.desc())
 
 
 def _serialize_transactions(txs: list[Transaction], db: Session) -> list[dict]:
@@ -524,31 +544,95 @@ def list_subscriptions_alias(db: Session = Depends(get_db)):
 
 
 @router.post("/recategorize")
-def recategorize(db: Session = Depends(get_db)):
+def recategorize(
+    background_tasks: BackgroundTasks,
+    background: bool = Query(False),
+    db: Session = Depends(get_db),
+):
     """Run the categorizer over every transaction and persist any changes."""
-    txs = db.query(Transaction).all()
-    payload = [
-        {
-            "_id": tx.id,
-            "merchant": (tx.normalized_merchant or tx.merchant or ""),
-            "category": tx.category,
+    if background:
+        job_id = uuid.uuid4().hex
+        RECATEGORIZE_JOBS[job_id] = {
+            "id": job_id,
+            "status": "queued",
+            "processed": 0,
+            "updated": 0,
+            "total": 0,
+            "error": None,
         }
-        for tx in txs
-    ]
+        background_tasks.add_task(_run_recategorize_job, job_id)
+        return RECATEGORIZE_JOBS[job_id]
+
+    return _run_recategorize(db)
+
+
+@router.get("/recategorize/{job_id}")
+def get_recategorize_job(job_id: str):
+    job = RECATEGORIZE_JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Recategorize job not found")
+    return job
+
+
+def _run_recategorize_job(job_id: str):
+    with SessionLocal() as db:
+        try:
+            _run_recategorize(db, job_id=job_id)
+        except Exception as e:
+            RECATEGORIZE_JOBS[job_id].update({
+                "status": "failed",
+                "error": str(e)[:500],
+            })
+
+
+def _run_recategorize(db: Session, job_id: str | None = None):
+    txs = db.query(Transaction).order_by(Transaction.id.asc()).all()
+    total = len(txs)
+    if job_id:
+        RECATEGORIZE_JOBS[job_id].update({
+            "status": "running",
+            "total": total,
+            "processed": 0,
+            "updated": 0,
+        })
 
     # Honor the experimental AI flag
     flag = db.query(AppConfig).filter(AppConfig.key == "ai_categorization_enabled").first()
     ai_enabled = bool(flag and flag.value.strip().lower() in ("1", "true", "yes", "on"))
     ai_fn = ai_categorize_batch if ai_enabled else None
 
-    categorize_transactions(payload, db, ai_categorize_fn=ai_fn)
-
     updated = 0
-    by_id = {tx.id: tx for tx in txs}
-    for row in payload:
-        tx = by_id.get(row["_id"])
-        if tx and tx.category != row["category"]:
-            tx.category = row["category"]
-            updated += 1
+    chunk_size = 50 if ai_enabled else 250
+    for start in range(0, total, chunk_size):
+        chunk = txs[start:start + chunk_size]
+        payload = [
+            {
+                "_id": tx.id,
+                "merchant": (tx.normalized_merchant or tx.merchant or ""),
+                "category": tx.category,
+            }
+            for tx in chunk
+        ]
+        categorize_transactions(payload, db, ai_categorize_fn=ai_fn)
+        by_id = {tx.id: tx for tx in chunk}
+        for row in payload:
+            tx = by_id.get(row["_id"])
+            if tx and tx.category != row["category"]:
+                tx.category = row["category"]
+                updated += 1
+        db.commit()
+        if job_id:
+            RECATEGORIZE_JOBS[job_id].update({
+                "processed": min(start + len(chunk), total),
+                "updated": updated,
+            })
+
     db.commit()
+    if job_id:
+        RECATEGORIZE_JOBS[job_id].update({
+            "status": "complete",
+            "processed": total,
+            "updated": updated,
+            "total": total,
+        })
     return {"status": "ok", "updated": updated, "total": len(txs)}

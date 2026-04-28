@@ -439,6 +439,7 @@ function RulesPanel() {
   const [categories, setCategories] = useState([]);
   const [recatRunning, setRecatRunning] = useState(false);
   const [recatResult, setRecatResult] = useState(null);
+  const [recatProgress, setRecatProgress] = useState(null);
 
   const load = async () => {
     try {
@@ -462,13 +463,30 @@ function RulesPanel() {
   const recategorize = async () => {
     setRecatRunning(true);
     setRecatResult(null);
+    setRecatProgress(null);
     try {
-      const r = await api.recategorize();
-      setRecatResult(r);
+      const started = await api.recategorize(true);
+      if (!started.id) {
+        setRecatResult(started);
+        return;
+      }
+      setRecatProgress(started);
+      let current = started;
+      while (!['complete', 'failed'].includes(current.status)) {
+        await sleep(700);
+        current = await api.getRecategorizeJob(started.id);
+        setRecatProgress(current);
+      }
+      if (current.status === 'failed') {
+        setRecatResult({ error: current.error || 'Recategorize failed' });
+      } else {
+        setRecatResult(current);
+      }
     } catch (e) {
       setRecatResult({ error: e.message });
     }
     setRecatRunning(false);
+    setRecatProgress(null);
     load();
   };
 
@@ -489,6 +507,19 @@ function RulesPanel() {
         {recatResult && !recatResult.error && (
           <div className="num mt-4" style={{ fontSize: 12 }}>
             {recatResult.updated} updated · {recatResult.total} total
+          </div>
+        )}
+        {recatProgress && (
+          <div className="mt-4">
+            <div className="bar" aria-label="Recategorization progress">
+              <div
+                className="bar-fill"
+                style={{ width: `${progressPercent(recatProgress)}%` }}
+              />
+            </div>
+            <div className="num muted mt-2" style={{ fontSize: 11 }}>
+              {recatProgress.processed || 0} / {recatProgress.total || 0} processed · {recatProgress.updated || 0} updated
+            </div>
           </div>
         )}
         {recatResult?.error && <div className="num neg mt-4" style={{ fontSize: 12 }}>{recatResult.error}</div>}
@@ -536,6 +567,15 @@ function RulesPanel() {
       )}
     </>
   );
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function progressPercent(progress) {
+  if (!progress?.total) return progress?.status === 'running' ? 8 : 0;
+  return Math.max(4, Math.min(100, Math.round((progress.processed / progress.total) * 100)));
 }
 
 function RoomPanel() {

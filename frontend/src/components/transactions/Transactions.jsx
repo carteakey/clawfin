@@ -34,6 +34,7 @@ export default function Transactions() {
   const [amountMin, setAmountMin] = useState('');
   const [amountMax, setAmountMax] = useState('');
   const [page, setPage] = useState(0);
+  const [sort, setSort] = useState({ by: 'date', dir: 'desc' });
   const [selected, setSelected] = useState(new Set());
   const [categories, setCategories] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -56,7 +57,9 @@ export default function Transactions() {
     include_off_budget: includeOffBudget,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE,
-  }), [days, startDate, endDate, amountMin, amountMax, category, accountId, search, includeOffBudget, page]);
+    sort_by: sort.by,
+    sort_dir: sort.dir,
+  }), [days, startDate, endDate, amountMin, amountMax, category, accountId, search, includeOffBudget, page, sort]);
 
   const refresh = () => fetchTransactions(params);
 
@@ -177,6 +180,18 @@ export default function Transactions() {
     });
   };
 
+  const toggleSort = (by) => {
+    setSort((current) => {
+      const next = current.by === by && current.dir === 'desc'
+        ? { by, dir: 'asc' }
+        : { by, dir: 'desc' };
+      setPage(0);
+      return next;
+    });
+  };
+
+  const sortCls = (by) => (sort.by === by ? `sortable sorted ${sort.dir}` : 'sortable');
+
   const allVisibleSelected = transactions.length > 0 && transactions.every((t) => selected.has(t.id));
   const accountCounts = useMemo(() => {
     const map = new Map();
@@ -284,11 +299,11 @@ export default function Transactions() {
                   aria-label="Select visible transactions"
                 />
               </th>
-              <th style={{ width: 90 }}>Date</th>
-              <th>Merchant</th>
-              <th style={{ width: 140 }}>Account</th>
-              <th style={{ width: 180 }}>Category</th>
-              <th className="r" style={{ width: 140 }}>Amount</th>
+              <th className={sortCls('date')} style={{ width: 90 }} onClick={() => toggleSort('date')}>Date</th>
+              <th className={sortCls('merchant')} onClick={() => toggleSort('merchant')}>Merchant</th>
+              <th className={sortCls('account_name')} style={{ width: 140 }} onClick={() => toggleSort('account_name')}>Account</th>
+              <th className={sortCls('category')} style={{ width: 180 }} onClick={() => toggleSort('category')}>Category</th>
+              <th className={`r ${sortCls('amount')}`} style={{ width: 140 }} onClick={() => toggleSort('amount')}>Amount</th>
               <th style={{ width: 70 }}>Ccy</th>
               <th style={{ width: 120 }}></th>
             </tr>

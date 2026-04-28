@@ -146,7 +146,8 @@ export const api = {
   createRule: (data) => request('/settings/rules', { method: 'POST', body: JSON.stringify(data) }),
   updateRule: (id, data) => request(`/settings/rules/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteRule: (id) => request(`/settings/rules/${id}`, { method: 'DELETE' }),
-  recategorize: () => request('/transactions/recategorize', { method: 'POST' }),
+  recategorize: (background = false) => request(`/transactions/recategorize${background ? '?background=true' : ''}`, { method: 'POST' }),
+  getRecategorizeJob: (id) => request(`/transactions/recategorize/${id}`),
 
   // AI categorization toggle
   getAIFlags: () => request('/settings/ai/flags'),

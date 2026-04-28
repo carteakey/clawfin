@@ -77,3 +77,67 @@ def test_filtered_export_and_bulk_category(client, db, monkeypatch):
     exported = client.get("/api/transactions/export.csv?days=3650&category=Dining")
     assert exported.status_code == 200
     assert "Shop 1" in exported.text
+
+
+def test_transactions_sort_by_amount(client, db, monkeypatch):
+    from backend.config import settings
+
+    monkeypatch.setattr(settings, "PASSWORD", "")
+    account = _manual_account(db)
+    for i, amount in enumerate([-5, -25, 10]):
+        tx_hash = Transaction.compute_hash(date(2026, 4, 28), amount, f"Sort {i}", account.id)
+        db.add(Transaction(
+            date=date(2026, 4, 28),
+            amount=amount,
+            merchant=f"Sort {i}",
+            category="Other",
+            account_id=account.id,
+            source=DataSource.MANUAL,
+            currency="CAD",
+            hash=tx_hash,
+        ))
+    db.commit()
+
+    asc = client.get("/api/transactions?days=3650&sort_by=amount&sort_dir=asc")
+    assert asc.status_code == 200
+    assert [row["amount"] for row in asc.json()["transactions"]] == [-25, -5, 10]
+
+
+def test_background_recategorize_reports_progress(client, db, monkeypatch):
+    from backend.config import settings
+    from backend.routers import transactions as transactions_router
+
+    class TestSessionContext:
+        def __enter__(self):
+            return db
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(settings, "PASSWORD", "")
+    monkeypatch.setattr(transactions_router, "SessionLocal", lambda: TestSessionContext())
+    transactions_router.RECATEGORIZE_JOBS.clear()
+    account = _manual_account(db)
+    tx_hash = Transaction.compute_hash(date(2026, 4, 28), -5, "STARBUCKS", account.id)
+    db.add(Transaction(
+        date=date(2026, 4, 28),
+        amount=-5,
+        merchant="STARBUCKS",
+        category="Other",
+        account_id=account.id,
+        source=DataSource.MANUAL,
+        currency="CAD",
+        hash=tx_hash,
+    ))
+    db.commit()
+
+    started = client.post("/api/transactions/recategorize?background=true")
+    assert started.status_code == 200
+    job_id = started.json()["id"]
+
+    progress = client.get(f"/api/transactions/recategorize/{job_id}")
+    assert progress.status_code == 200
+    body = progress.json()
+    assert body["status"] == "complete"
+    assert body["processed"] == 1
+    assert body["total"] == 1

@@ -3,7 +3,7 @@ import { useStore } from '../../store/ledger';
 import { api } from '../../api/client';
 
 export default function ChatPanel() {
-  const { chatOpen, chatMessages, chatLoading, toggleChat, sendMessage, sendBriefing } = useStore();
+  const { chatOpen, chatMessages, chatLoading, clearChat, toggleChat, sendMessage, sendBriefing } = useStore();
   const [input, setInput] = useState('');
   const [aiConfig, setAiConfig] = useState(null);
   const messagesEnd = useRef(null);

@@ -1075,7 +1075,7 @@ kbd {
 /* ── Ledger controls ─────────────────────────────────────────────── */
 .ledger-toolbar {
   display: grid;
-  grid-template-columns: repeat(4, auto) minmax(150px, 180px) repeat(4, minmax(120px, 1fr)) minmax(180px, 1.4fr) auto auto auto;
+  grid-template-columns: repeat(4, auto) minmax(150px, 180px) repeat(4, minmax(120px, 1fr)) minmax(180px, 1.4fr) auto auto auto auto;
   gap: var(--sp-2);
   align-items: center;
   margin-bottom: var(--sp-4);
@@ -1096,6 +1096,26 @@ kbd {
   background: var(--accent-tint);
 }
 
+.status-box {
+  max-width: 720px;
+  margin-bottom: var(--sp-4);
+  border: 1px solid currentColor;
+  padding: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.source-badge {
+  display: inline-block;
+  border: 1px solid var(--rule-2);
+  padding: 1px 6px;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
 .ledger-table input[type="checkbox"] {
   width: 14px;
   height: 14px;
@@ -1107,6 +1127,15 @@ kbd {
   align-items: center;
   gap: var(--sp-2);
   font-weight: 500;
+}
+
+.ledger-memo {
+  margin-top: 2px;
+  color: var(--ink-3);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 420px;
 }
 
 .pending-label {

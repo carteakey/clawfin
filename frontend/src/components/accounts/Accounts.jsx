@@ -38,6 +38,8 @@ function syncStatus(acct) {
 export default function Accounts() {
   const [accounts, setAccounts] = useState(null);
   const [error, setError] = useState(null);
+  const [status, setStatus] = useState(null);
+  const [mutating, setMutating] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [newAcct, setNewAcct] = useState({ name: '', institution: '', account_type: 'chequing', currency: 'CAD', on_budget: true });
   const hideBalances = useStore((s) => s.hideBalances);
@@ -52,33 +54,45 @@ export default function Accounts() {
 
   const handleAddAccount = async (e) => {
     e.preventDefault();
+    setMutating(true);
+    setStatus(null);
     try {
       await api.createAccount(newAcct);
       setShowAdd(false);
       setNewAcct({ name: '', institution: '', account_type: 'chequing', currency: 'CAD', on_budget: true });
       load();
+      setStatus({ type: 'success', text: 'Manual account created.' });
     } catch (e) {
-      alert(`Error creating account: ${e.message}`);
+      setStatus({ type: 'error', text: `Error creating account: ${e.message}` });
     }
+    setMutating(false);
   };
 
   const toggleBudget = async (id, currentVal) => {
+    setMutating(true);
+    setStatus(null);
     try {
       await api.updateAccount(id, { on_budget: !currentVal });
       load();
+      setStatus({ type: 'success', text: `Budget scope ${currentVal ? 'disabled' : 'enabled'}.` });
     } catch (e) {
-      alert(`Error updating account: ${e.message}`);
+      setStatus({ type: 'error', text: `Error updating account: ${e.message}` });
     }
+    setMutating(false);
   };
 
   const deleteAccount = async (id) => {
     if (!window.confirm('Delete this account and all its transactions? This cannot be undone.')) return;
+    setMutating(true);
+    setStatus(null);
     try {
       await api.deleteAccount(id);
       load();
+      setStatus({ type: 'success', text: 'Account deleted.' });
     } catch (e) {
-      alert(`Error deleting account: ${e.message}`);
+      setStatus({ type: 'error', text: `Error deleting account: ${e.message}` });
     }
+    setMutating(false);
   };
 
   const { byInstitution, totals } = useMemo(() => {
@@ -181,9 +195,15 @@ export default function Accounts() {
                   onChange={(e) => setNewAcct({ ...newAcct, currency: e.target.value.toUpperCase() })}
                 />
               </div>
-              <button type="submit" className="btn btn-primary" style={{ height: 34 }}>CREATE</button>
+              <button type="submit" className="btn btn-primary" style={{ height: 34 }} disabled={mutating}>CREATE</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {status && (
+        <div className={`status-box ${status.type === 'error' ? 'neg' : 'pos'}`}>
+          {status.text}
         </div>
       )}
 
@@ -206,6 +226,7 @@ export default function Accounts() {
                 <tr>
                   <th style={{ width: 24 }} />
                   <th>Account</th>
+                  <th style={{ width: 110 }}>Source</th>
                   <th style={{ width: 140 }}>Type</th>
                   <th className="r" style={{ width: 160 }}>Balance</th>
                   <th className="r" style={{ width: 160 }}>Available</th>
@@ -242,11 +263,19 @@ export default function Accounts() {
                     >
                       {a.name}
                     </td>
+                    <td><SourceBadge source={a.source} /></td>
                     <td className="muted num" style={{ fontSize: 10, letterSpacing: '0.1em' }}>
                       <select
                         value={a.account_type || 'other'}
                         onChange={(e) => {
-                          api.updateAccount(a.id, { account_type: e.target.value }).then(load).catch(alert);
+                          setMutating(true);
+                          api.updateAccount(a.id, { account_type: e.target.value })
+                            .then(() => {
+                              load();
+                              setStatus({ type: 'success', text: 'Account type updated.' });
+                            })
+                            .catch((e) => setStatus({ type: 'error', text: `Error updating account: ${e.message || e}` }))
+                            .finally(() => setMutating(false));
                         }}
                         style={{ background: 'transparent', border: 'none', color: 'inherit', fontSize: 'inherit', letterSpacing: 'inherit', padding: 0, cursor: 'pointer', textTransform: 'uppercase' }}
                       >
@@ -270,6 +299,7 @@ export default function Accounts() {
                         className="btn btn-ghost"
                         style={{ fontSize: 10, padding: '2px 8px' }}
                         onClick={() => toggleBudget(a.id, a.on_budget)}
+                        disabled={mutating}
                       >
                         {a.on_budget ? 'ON' : 'OFF'}
                       </button>
@@ -280,6 +310,7 @@ export default function Accounts() {
                         className="btn btn-ghost neg"
                         style={{ fontSize: 10, padding: '2px 8px' }}
                         onClick={() => deleteAccount(a.id)}
+                        disabled={mutating}
                       >
                         Del
                       </button>
@@ -294,6 +325,11 @@ export default function Accounts() {
       ))}
     </>
   );
+}
+
+function SourceBadge({ source }) {
+  const label = (source || 'unknown').replace('csv_', '').replace('_', ' ').toUpperCase();
+  return <span className="source-badge">{label}</span>;
 }
 
 function Kpi({ label, value }) {

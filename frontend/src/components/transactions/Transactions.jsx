@@ -23,7 +23,7 @@ const emptyForm = {
 };
 
 export default function Transactions() {
-  const { transactions, transactionsTotal, transactionsLoading, fetchTransactions, selectedAccountId, setSelectedAccountId } = useStore();
+  const { transactions, transactionsTotal, transactionsLoading, fetchTransactions, selectedAccountId, setSelectedAccountId, setView } = useStore();
   const [days, setDays] = useState(30);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
@@ -41,7 +41,8 @@ export default function Transactions() {
   const [showManual, setShowManual] = useState(false);
   const [manualForm, setManualForm] = useState(emptyForm);
   const [editing, setEditing] = useState(null);
-  const [message, setMessage] = useState('');
+  const [status, setStatus] = useState(null);
+  const [mutating, setMutating] = useState(false);
 
   const manualAccounts = accounts.filter((a) => a.source === 'manual');
 
@@ -75,19 +76,37 @@ export default function Transactions() {
 
   const pageCount = Math.max(1, Math.ceil(transactionsTotal / PAGE_SIZE));
 
+  const showStatus = (type, text) => setStatus({ type, text });
+
+  const validateForm = (form) => {
+    if (!form.date) return 'Date is required.';
+    if (!form.merchant?.trim()) return 'Merchant is required.';
+    if (!form.account_id) return 'Choose a manual account.';
+    if (Number.isNaN(parseFloat(form.amount))) return 'Amount must be a number.';
+    if (!form.currency?.trim()) return 'Currency is required.';
+    return null;
+  };
+
   const handleCategoryChange = async (tx, newCategory) => {
     useStore.setState((s) => ({
       transactions: s.transactions.map((t) => (t.id === tx.id ? { ...t, category: newCategory } : t)),
     }));
     try {
       await api.updateTransaction(tx.id, { category: newCategory, save_rule: true });
+      showStatus('success', `Saved category for ${tx.merchant}.`);
     } catch (e) {
-      setMessage(`Update failed: ${e.message}`);
+      showStatus('error', `Update failed: ${e.message}`);
     }
   };
 
   const createManual = async () => {
-    setMessage('');
+    const error = validateForm(manualForm);
+    if (error) {
+      showStatus('error', error);
+      return;
+    }
+    setMutating(true);
+    setStatus(null);
     try {
       await api.createTransaction({
         ...manualForm,
@@ -97,13 +116,21 @@ export default function Transactions() {
       setManualForm(emptyForm);
       setShowManual(false);
       await refresh();
+      showStatus('success', 'Manual transaction created.');
     } catch (e) {
-      setMessage(e.message);
+      showStatus('error', e.message);
     }
+    setMutating(false);
   };
 
   const saveEdit = async () => {
-    setMessage('');
+    const error = validateForm(editing);
+    if (error) {
+      showStatus('error', error);
+      return;
+    }
+    setMutating(true);
+    setStatus(null);
     try {
       await api.updateTransaction(editing.id, {
         date: editing.date,
@@ -116,41 +143,54 @@ export default function Transactions() {
       });
       setEditing(null);
       await refresh();
+      showStatus('success', 'Manual transaction saved.');
     } catch (e) {
-      setMessage(e.message);
+      showStatus('error', e.message);
     }
+    setMutating(false);
   };
 
   const deleteManual = async (tx) => {
-    setMessage('');
+    if (!window.confirm(`Delete manual transaction "${tx.merchant}"? This cannot be undone.`)) return;
+    setMutating(true);
+    setStatus(null);
     try {
       await api.deleteTransaction(tx.id);
       await refresh();
+      showStatus('success', 'Manual transaction deleted.');
     } catch (e) {
-      setMessage(e.message);
+      showStatus('error', e.message);
     }
+    setMutating(false);
   };
 
   const bulkCategory = async (newCategory) => {
-    setMessage('');
+    setMutating(true);
+    setStatus(null);
     try {
       await api.bulkTransactions({ ids: [...selected], category: newCategory });
       setSelected(new Set());
       await refresh();
+      showStatus('success', `${selected.size} transactions updated.`);
     } catch (e) {
-      setMessage(e.message);
+      showStatus('error', e.message);
     }
+    setMutating(false);
   };
 
   const bulkDelete = async () => {
-    setMessage('');
+    if (!window.confirm(`Delete ${selected.size} selected manual transactions? This cannot be undone.`)) return;
+    setMutating(true);
+    setStatus(null);
     try {
       await api.bulkTransactions({ ids: [...selected], delete: true });
       setSelected(new Set());
       await refresh();
+      showStatus('success', 'Selected manual transactions deleted.');
     } catch (e) {
-      setMessage(e.message);
+      showStatus('error', e.message);
     }
+    setMutating(false);
   };
 
   const downloadCsv = async () => {
@@ -159,7 +199,7 @@ export default function Transactions() {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) {
-      setMessage(`Export failed: HTTP ${res.status}`);
+      showStatus('error', `Export failed: HTTP ${res.status}`);
       return;
     }
     const blob = await res.blob();
@@ -191,6 +231,22 @@ export default function Transactions() {
   };
 
   const sortCls = (by) => (sort.by === by ? `sortable sorted ${sort.dir}` : 'sortable');
+
+  const clearFilters = () => {
+    setDays(30);
+    setSearch('');
+    setCategory('');
+    setAccountId('');
+    setSelectedAccountId('');
+    setIncludeOffBudget(false);
+    setStartDate('');
+    setEndDate('');
+    setAmountMin('');
+    setAmountMax('');
+    setPage(0);
+    setSort({ by: 'date', dir: 'desc' });
+    setSelected(new Set());
+  };
 
   const allVisibleSelected = transactions.length > 0 && transactions.every((t) => selected.has(t.id));
   const accountCounts = useMemo(() => {
@@ -253,15 +309,32 @@ export default function Transactions() {
           <div className="toggle-knob" />
           <span className="toggle-label">Off-Budget</span>
         </button>
+        <button type="button" className="btn btn-ghost" onClick={clearFilters}>
+          <X size={14} /> Clear
+        </button>
         <button type="button" className="btn btn-ghost" onClick={downloadCsv} title="Export filtered CSV" aria-label="Export filtered CSV">
           <Download size={14} /> CSV
         </button>
-        <button type="button" className="btn btn-primary" onClick={() => setShowManual(!showManual)} title="Add manual transaction" aria-label="Add manual transaction">
+        <button type="button" className="btn btn-primary" onClick={() => setShowManual(!showManual)} title="Add manual transaction" aria-label="Add manual transaction" disabled={manualAccounts.length === 0}>
           <Plus size={14} /> Manual
         </button>
       </div>
 
-      {message && <div className="block mb-4 neg" style={{ maxWidth: 720 }}>{message}</div>}
+      {manualAccounts.length === 0 && (
+        <div className="block mb-4" style={{ maxWidth: 720 }}>
+          <div className="label mb-2">Manual Account Required</div>
+          <div className="muted" style={{ fontSize: 12 }}>Create a manual account in Accounts before adding manual transactions.</div>
+          <button type="button" className="btn btn-primary mt-4" onClick={() => setView('accounts')}>
+            <Plus size={14} /> Add Account
+          </button>
+        </div>
+      )}
+
+      {status && (
+        <div className={`status-box ${status.type === 'error' ? 'neg' : 'pos'}`}>
+          {status.text}
+        </div>
+      )}
 
       {showManual && (
         <TransactionForm
@@ -272,6 +345,7 @@ export default function Transactions() {
           categories={categories}
           onCancel={() => setShowManual(false)}
           onSave={createManual}
+          disabled={mutating}
         />
       )}
 
@@ -282,7 +356,7 @@ export default function Transactions() {
             <option value="">SET CATEGORY</option>
             {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
           </select>
-          <button type="button" className="btn btn-ghost" onClick={bulkDelete}><Trash2 size={14} /> Delete Manual</button>
+          <button type="button" className="btn btn-ghost" onClick={bulkDelete} disabled={mutating}><Trash2 size={14} /> Delete Manual</button>
           <button type="button" className="btn btn-ghost" onClick={() => setSelected(new Set())}><X size={14} /> Clear</button>
         </div>
       )}
@@ -317,9 +391,12 @@ export default function Transactions() {
                   <td><input type="checkbox" checked={selected.has(tx.id)} onChange={() => toggleSelected(tx.id)} aria-label={`Select ${tx.merchant}`} /></td>
                   <td className="num muted">{formatDate(tx.date)}</td>
                   <td>
-                    <div className="merchant-cell">
-                      <span>{tx.normalized_merchant || tx.merchant}</span>
-                      {tx.pending && <span className="label pending-label">PENDING</span>}
+                    <div>
+                      <div className="merchant-cell">
+                        <span>{tx.normalized_merchant || tx.merchant}</span>
+                        {tx.pending && <span className="label pending-label">PENDING</span>}
+                      </div>
+                      {tx.memo && <div className="ledger-memo">{tx.memo}</div>}
                     </div>
                   </td>
                   <td className="muted truncate" title={tx.account_name}>{tx.account_name}</td>
@@ -340,7 +417,7 @@ export default function Transactions() {
                           <button type="button" className="icon-btn" onClick={() => setEditing({ ...tx })} title="Edit transaction" aria-label="Edit transaction">
                             <Edit2 size={14} />
                           </button>
-                          <button type="button" className="icon-btn" onClick={() => deleteManual(tx)} title="Delete transaction" aria-label="Delete transaction">
+                          <button type="button" className="icon-btn" onClick={() => deleteManual(tx)} title="Delete transaction" aria-label="Delete transaction" disabled={mutating}>
                             <Trash2 size={14} />
                           </button>
                         </>
@@ -371,6 +448,7 @@ export default function Transactions() {
           categories={categories}
           onCancel={() => setEditing(null)}
           onSave={saveEdit}
+          disabled={mutating}
         />
       )}
 
@@ -378,7 +456,7 @@ export default function Transactions() {
   );
 }
 
-function TransactionForm({ title, form, setForm, accounts, categories, onCancel, onSave }) {
+function TransactionForm({ title, form, setForm, accounts, categories, onCancel, onSave, disabled = false }) {
   return (
     <div className="block mb-4 ledger-form">
       <div className="block-title">{title}</div>
@@ -395,8 +473,8 @@ function TransactionForm({ title, form, setForm, accounts, categories, onCancel,
       <input placeholder="CCY" value={form.currency || 'CAD'} maxLength={3} onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value.toUpperCase() }))} />
       <input placeholder="MEMO" value={form.memo || ''} onChange={(e) => setForm((f) => ({ ...f, memo: e.target.value }))} />
       <div className="form-actions">
-        <button type="button" className="btn btn-primary" onClick={onSave}><Save size={14} /> Save</button>
-        <button type="button" className="btn btn-ghost" onClick={onCancel}><X size={14} /> Cancel</button>
+        <button type="button" className="btn btn-primary" onClick={onSave} disabled={disabled}><Save size={14} /> Save</button>
+        <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={disabled}><X size={14} /> Cancel</button>
       </div>
     </div>
   );

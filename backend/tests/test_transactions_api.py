@@ -103,6 +103,69 @@ def test_transactions_sort_by_amount(client, db, monkeypatch):
     assert [row["amount"] for row in asc.json()["transactions"]] == [-25, -5, 10]
 
 
+def test_search_matches_transaction_memo(client, db, monkeypatch):
+    from backend.config import settings
+
+    monkeypatch.setattr(settings, "PASSWORD", "")
+    account = _manual_account(db)
+    tx_hash = Transaction.compute_hash(date(2026, 4, 28), -12, "Receipt", account.id)
+    db.add(Transaction(
+        date=date(2026, 4, 28),
+        amount=-12,
+        merchant="Receipt",
+        memo="Birthday dinner",
+        category="Other",
+        account_id=account.id,
+        source=DataSource.MANUAL,
+        currency="CAD",
+        hash=tx_hash,
+    ))
+    db.commit()
+
+    response = client.get("/api/transactions?days=3650&search=birthday")
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+
+
+def test_non_manual_transactions_reject_manual_mutations(client, db, monkeypatch):
+    from backend.config import settings
+
+    monkeypatch.setattr(settings, "PASSWORD", "")
+    account = Account(
+        institution="Bank",
+        name="Feed",
+        account_type=AccountType.CHEQUING,
+        currency="CAD",
+        source=DataSource.SIMPLEFIN,
+        external_id="sf-account",
+    )
+    db.add(account)
+    db.flush()
+    tx_hash = Transaction.compute_hash(date(2026, 4, 28), -5, "Feed Tx", account.id)
+    tx = Transaction(
+        date=date(2026, 4, 28),
+        amount=-5,
+        merchant="Feed Tx",
+        category="Other",
+        account_id=account.id,
+        source=DataSource.SIMPLEFIN,
+        currency="CAD",
+        hash=tx_hash,
+    )
+    db.add(tx)
+    db.commit()
+    db.refresh(tx)
+
+    edit = client.patch(f"/api/transactions/{tx.id}", json={"amount": -10})
+    assert edit.status_code == 400
+
+    delete = client.delete(f"/api/transactions/{tx.id}")
+    assert delete.status_code == 400
+
+    category = client.patch(f"/api/transactions/{tx.id}", json={"category": "Dining"})
+    assert category.status_code == 200
+
+
 def test_background_recategorize_reports_progress(client, db, monkeypatch):
     from backend.config import settings
     from backend.routers import transactions as transactions_router

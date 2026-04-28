@@ -170,7 +170,13 @@ def _filtered_transaction_query(
         q = q.filter(Transaction.account_id == account_id)
     if search:
         needle = f"%{search}%"
-        q = q.filter(Transaction.merchant.ilike(needle))
+        from sqlalchemy import or_
+        q = q.filter(or_(
+            Transaction.merchant.ilike(needle),
+            Transaction.normalized_merchant.ilike(needle),
+            Transaction.memo.ilike(needle),
+            Transaction.description.ilike(needle),
+        ))
     return q
 
 

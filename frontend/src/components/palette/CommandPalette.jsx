@@ -30,7 +30,7 @@ export default function CommandPalette() {
     const actions = [
       {
         id: 'action:chat',
-        label: 'Ask ClawFin (chat)',
+        label: 'Ask AutoFin (chat)',
         group: 'Action',
         hint: '⇧⌘K',
         run: () => { toggleChat(); },

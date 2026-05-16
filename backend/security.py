@@ -11,7 +11,7 @@ ENC_PREFIX = "enc:"
 
 
 def _fernet() -> Fernet:
-    secret = settings.SECRET_KEY or "clawfin-dev-secret-change-me"
+    secret = settings.SECRET_KEY or "autofin-dev-secret-change-me"
     digest = hashlib.sha256(secret.encode("utf-8")).digest()
     key = base64.urlsafe_b64encode(digest)
     return Fernet(key)

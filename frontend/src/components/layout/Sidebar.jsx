@@ -20,7 +20,7 @@ export default function Sidebar() {
   return (
     <aside className="app-sidebar">
       <div className="logo">
-        <div className="logo-text">ClawFin</div>
+        <div className="logo-text">AutoFin</div>
       </div>
 
       <nav>

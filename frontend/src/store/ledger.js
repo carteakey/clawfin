@@ -3,7 +3,7 @@ import { api } from '../api/client';
 
 export const useStore = create((set, get) => ({
   // Auth
-  isAuthenticated: !!localStorage.getItem('clawfin_token'),
+  isAuthenticated: !!(localStorage.getItem('autofin_token') || localStorage.getItem('clawfin_token')),
   authRequired: null,
   setAuthenticated: (v) => set({ isAuthenticated: v }),
 
@@ -11,13 +11,13 @@ export const useStore = create((set, get) => ({
   theme: document.documentElement.dataset.theme || 'dark',
   setTheme: (t) => {
     document.documentElement.dataset.theme = t;
-    localStorage.setItem('clawfin_theme', t);
+    localStorage.setItem('autofin_theme', t);
     set({ theme: t });
   },
-  hideBalances: localStorage.getItem('clawfin_hide_balances') === 'true',
+  hideBalances: (localStorage.getItem('autofin_hide_balances') || localStorage.getItem('clawfin_hide_balances')) === 'true',
   toggleHideBalances: () => set((s) => {
     const next = !s.hideBalances;
-    localStorage.setItem('clawfin_hide_balances', String(next));
+    localStorage.setItem('autofin_hide_balances', String(next));
     return { hideBalances: next };
   }),
 

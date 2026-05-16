@@ -1,6 +1,6 @@
 # TODO
 
-Roadmap and upcoming features for ClawFin.
+Roadmap and upcoming features for AutoFin.
 
 ## High Priority
 - [x] **Manual Transactions:** Add ability to create, edit, and delete manual transactions for manual accounts.
@@ -47,7 +47,7 @@ Roadmap and upcoming features for ClawFin.
 - [ ] **SimpleFin Encryption Tests:** Test encrypted SimpleFin credential storage.
 - [ ] **API Shape Tests:** Add response shape tests for ledger filters and CSV export.
 - [ ] **API Client Tests:** Add frontend tests for API client parameter generation.
-- [ ] **Default Secret Warning:** Warn at startup when `CLAWFIN_SECRET_KEY` is still the default.
+- [ ] **Default Secret Warning:** Warn at startup when `AUTOFIN_SECRET_KEY` is still the default.
 - [ ] **Backup Failure Handling:** Improve database export errors for missing or locked DB files.
 - [ ] **Advanced Filter Disclosure:** Collapse less common ledger filters behind an Advanced control.
 - [ ] **Sticky Ledger Header:** Keep ledger table header sticky inside the scroll container.

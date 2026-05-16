@@ -1,9 +1,12 @@
 /**
- * ClawFin API client — talks to the FastAPI backend.
+ * AutoFin API client — talks to the FastAPI backend.
  */
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
-let authToken = localStorage.getItem('clawfin_token');
+let authToken = localStorage.getItem('autofin_token') || localStorage.getItem('clawfin_token');
+if (!localStorage.getItem('autofin_token') && authToken) {
+  localStorage.setItem('autofin_token', authToken);
+}
 
 async function request(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
@@ -12,6 +15,7 @@ async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
   if (res.status === 401) {
+    localStorage.removeItem('autofin_token');
     localStorage.removeItem('clawfin_token');
     authToken = null;
     window.location.reload();
@@ -160,5 +164,5 @@ export const api = {
   getAIFlags: () => request('/settings/ai/flags'),
   setAIFlags: (data) => request('/settings/ai/flags', { method: 'PUT', body: JSON.stringify(data) }),
 
-  setToken: (token) => { authToken = token; localStorage.setItem('clawfin_token', token); },
+  setToken: (token) => { authToken = token; localStorage.setItem('autofin_token', token); },
 };

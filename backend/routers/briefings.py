@@ -24,16 +24,18 @@ class TransactionBriefingRequest(BaseModel):
 
 
 def require_automation_token(
+    x_autofin_automation_token: str | None = Header(default=None),
     x_clawfin_automation_token: str | None = Header(default=None),
 ):
+    token = x_autofin_automation_token or x_clawfin_automation_token
     if not settings.AUTOMATION_TOKEN:
         raise HTTPException(
             status_code=503,
-            detail="Automation token not configured. Set CLAWFIN_AUTOMATION_TOKEN.",
+            detail="Automation token not configured. Set AUTOFIN_AUTOMATION_TOKEN.",
         )
-    if not x_clawfin_automation_token:
+    if not token:
         raise HTTPException(status_code=401, detail="Missing automation token")
-    if not hmac.compare_digest(x_clawfin_automation_token, settings.AUTOMATION_TOKEN):
+    if not hmac.compare_digest(token, settings.AUTOMATION_TOKEN):
         raise HTTPException(status_code=401, detail="Invalid automation token")
 
 

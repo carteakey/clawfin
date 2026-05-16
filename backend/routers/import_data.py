@@ -173,7 +173,7 @@ async def simplefin_status(db: Session = Depends(get_db)):
 async def simplefin_sync(db: Session = Depends(get_db)):
     access_url = _get_simplefin_access_url(db)
     if not access_url:
-        raise HTTPException(status_code=400, detail="SimpleFin not configured. Connect SimpleFin or set CLAWFIN_SIMPLEFIN_ACCESS_URL.")
+        raise HTTPException(status_code=400, detail="SimpleFin not configured. Connect SimpleFin or set AUTOFIN_SIMPLEFIN_ACCESS_URL.")
 
     client = SimpleFinClient(access_url)
     sync_started_at = datetime.utcnow()

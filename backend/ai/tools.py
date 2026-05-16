@@ -1,4 +1,4 @@
-"""AI agent tools — functions the LLM can call to interact with ClawFin data."""
+"""AI agent tools — functions the LLM can call to interact with AutoFin data."""
 import json
 from datetime import date, timedelta
 from sqlalchemy.orm import Session

@@ -1,4 +1,6 @@
 """Chat API router — SSE streaming."""
+from datetime import date
+
 import httpx
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
@@ -19,6 +21,7 @@ class ChatRequest(BaseModel):
 
 class ChatBriefingRequest(BaseModel):
     period: str
+    end_date: date | None = None
     include_transactions: bool = False
     max_transactions: int = 25
 
@@ -58,6 +61,7 @@ async def chat_briefing(req: ChatBriefingRequest, db: Session = Depends(get_db))
     context = build_transaction_briefing_context(
         db,
         period=req.period,
+        end_date=req.end_date,
         include_transactions=req.include_transactions,
         max_transactions=req.max_transactions,
     )

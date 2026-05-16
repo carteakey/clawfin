@@ -1,4 +1,4 @@
-# ClawFin — Design & Functionality Review
+# AutoFin — Design & Functionality Review
 
 A thorough audit of the current v0.1 codebase with honest opinions on what fits the product's identity and what doesn't.
 

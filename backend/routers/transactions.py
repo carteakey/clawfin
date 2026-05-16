@@ -135,7 +135,7 @@ def export_transactions_csv(
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=clawfin-ledger.csv"},
+        headers={"Content-Disposition": "attachment; filename=autofin-ledger.csv"},
     )
 
 

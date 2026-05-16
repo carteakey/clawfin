@@ -21,7 +21,7 @@ def export_database():
     db_path = Path(app_settings.DB_PATH)
     if not db_path.exists():
         raise HTTPException(status_code=404, detail="Database file not found")
-    filename = f"clawfin-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
+    filename = f"autofin-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
     return FileResponse(
         path=str(db_path),
         filename=filename,

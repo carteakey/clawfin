@@ -63,7 +63,7 @@ def test_daily_context_briefing_returns_metrics(client, db):
 
     response = client.post(
         "/api/briefings/transactions",
-        headers={"X-ClawFin-Automation-Token": "test-token"},
+        headers={"X-AutoFin-Automation-Token": "test-token"},
         json={"period": "daily", "mode": "context", "end_date": "2026-04-25"},
     )
 
@@ -91,7 +91,7 @@ def test_weekly_context_can_include_transactions(client, db):
 
     response = client.post(
         "/api/briefings/transactions",
-        headers={"X-ClawFin-Automation-Token": "test-token"},
+        headers={"X-AutoFin-Automation-Token": "test-token"},
         json={
             "period": "weekly",
             "mode": "context",
@@ -123,7 +123,7 @@ def test_generate_briefing_calls_ai_provider(client, db, monkeypatch):
 
     response = client.post(
         "/api/briefings/transactions",
-        headers={"X-ClawFin-Automation-Token": "test-token"},
+        headers={"X-AutoFin-Automation-Token": "test-token"},
         json={"period": "weekly", "mode": "generate", "end_date": "2026-04-25"},
     )
 
@@ -148,11 +148,10 @@ def test_chat_briefing_uses_user_safe_endpoint(client, db, monkeypatch):
 
     response = client.post(
         "/api/chat/briefing",
-        json={"period": "weekly"},
+        json={"period": "weekly", "end_date": "2026-04-25"},
     )
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["summary"] == "Weekly status from chat briefing."
     assert payload["context"]["period"] == "weekly"
-

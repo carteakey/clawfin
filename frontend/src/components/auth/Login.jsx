@@ -28,7 +28,7 @@ export default function Login() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <h1>ClawFin</h1>
+        <h1>AutoFin</h1>
         <p className="tag">Your Ledger · Locally Held</p>
 
         {error && <div className="err">{error.toUpperCase()}</div>}

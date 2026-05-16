@@ -19,7 +19,7 @@ class TokenResponse(BaseModel):
 
 
 def require_auth(credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)):
-    """Require the UI JWT when CLAWFIN_PASSWORD is configured."""
+    """Require the UI JWT when AUTOFIN_PASSWORD is configured."""
     if not settings.PASSWORD:
         return
 
@@ -35,7 +35,7 @@ def require_auth(credentials: HTTPAuthorizationCredentials | None = Depends(bear
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    if payload.get("sub") != "clawfin-user":
+    if payload.get("sub") not in {"autofin-user", "clawfin-user"}:
         raise HTTPException(status_code=401, detail="Invalid token subject")
 
 
@@ -44,14 +44,14 @@ def login(req: LoginRequest):
     """Authenticate with the app password."""
     if not settings.PASSWORD:
         # No password set — open access
-        raise HTTPException(status_code=400, detail="No password configured. Set CLAWFIN_PASSWORD env var.")
+        raise HTTPException(status_code=400, detail="No password configured. Set AUTOFIN_PASSWORD env var.")
 
     if req.password != settings.PASSWORD:
         raise HTTPException(status_code=401, detail="Invalid password")
 
     expires = datetime.utcnow() + timedelta(hours=settings.TOKEN_EXPIRE_HOURS)
     token = jwt.encode(
-        {"exp": expires, "sub": "clawfin-user"},
+        {"exp": expires, "sub": "autofin-user"},
         settings.SECRET_KEY,
         algorithm="HS256",
     )

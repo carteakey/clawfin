@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from backend.ai import provider, tools
 
 
-SYSTEM_PROMPT = """You are ClawFin, an AI financial assistant for a Canadian user. You have access to their personal financial data including bank transactions, investment holdings, and account balances.
+SYSTEM_PROMPT = """You are AutoFin, an AI financial assistant for a Canadian user. You have access to their personal financial data including bank transactions, investment holdings, and account balances.
 
 Rules:
 - Always use the available tools to look up real data before answering. Never guess or hallucinate numbers.

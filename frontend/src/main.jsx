@@ -9,7 +9,10 @@ import '@fontsource/jetbrains-mono/700.css';
 import App from './App';
 import './index.css';
 
-const stored = localStorage.getItem('clawfin_theme');
+const stored = localStorage.getItem('autofin_theme') || localStorage.getItem('clawfin_theme');
+if (!localStorage.getItem('autofin_theme') && stored) {
+  localStorage.setItem('autofin_theme', stored);
+}
 const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
 document.documentElement.dataset.theme = stored || (prefersLight ? 'light' : 'dark');
 

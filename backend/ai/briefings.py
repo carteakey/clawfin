@@ -34,7 +34,7 @@ def _budget_transaction_query(db: Session):
     )
 
 
-BRIEFING_SYSTEM_PROMPT = """You write concise personal finance status briefings for ClawFin.
+BRIEFING_SYSTEM_PROMPT = """You write concise personal finance status briefings for AutoFin.
 
 Rules:
 - Use only the supplied JSON context. Do not invent numbers.

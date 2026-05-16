@@ -7,8 +7,8 @@ from backend.routers import auth, transactions, holdings, import_data, dashboard
 
 
 app = FastAPI(
-    title="ClawFin",
-    description="Your AI grip on Canadian finances",
+    title="AutoFin",
+    description="Automated AI finance for Canadians",
     version="0.1.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",

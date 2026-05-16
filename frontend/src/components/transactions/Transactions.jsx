@@ -210,7 +210,7 @@ export default function Transactions() {
   };
 
   const downloadCsv = async () => {
-    const token = localStorage.getItem('clawfin_token');
+    const token = localStorage.getItem('autofin_token');
     const res = await fetch(api.exportTransactionsUrl(params), {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
@@ -222,7 +222,7 @@ export default function Transactions() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'clawfin-ledger.csv';
+    a.download = 'autofin-ledger.csv';
     a.click();
     URL.revokeObjectURL(url);
   };

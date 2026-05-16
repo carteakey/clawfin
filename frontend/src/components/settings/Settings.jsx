@@ -37,7 +37,7 @@ export default function Settings() {
 
 function DataPanel() {
   const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/$/, '');
-  const token = localStorage.getItem('clawfin_token');
+  const token = localStorage.getItem('autofin_token');
   const [reinferMsg, setReinferMsg] = useState('');
   const [reinferBusy, setReinferBusy] = useState(false);
 
@@ -50,7 +50,7 @@ function DataPanel() {
       const blob = await res.blob();
       const cd = res.headers.get('content-disposition') || '';
       const match = /filename="?([^"]+)"?/.exec(cd);
-      const filename = match ? match[1] : 'clawfin-export.db';
+      const filename = match ? match[1] : 'autofin-export.db';
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -86,7 +86,7 @@ function DataPanel() {
           Download Backup →
         </button>
         <p className="muted mt-4" style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>
-          Location on disk: ~/.clawfin/clawfin.db (CLAWFIN_DB_PATH env override)
+          Location on disk: ~/.autofin/autofin.db (AUTOFIN_DB_PATH env override)
         </p>
       </div>
 

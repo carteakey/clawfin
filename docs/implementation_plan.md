@@ -1,4 +1,4 @@
-# ClawFin — Implementation Plan
+# AutoFin — Implementation Plan
 
 ## Philosophy
 
@@ -77,7 +77,7 @@ A single-page, local-first financial dashboard that ingests Canadian bank CSVs a
 ## Repo Structure
 
 ```
-clawfin/
+autofin/
 ├── index.html
 ├── vite.config.js
 ├── package.json
@@ -160,7 +160,7 @@ clawfin/
 
 ### 2. Design System
 
-#### [NEW] [index.css](file:///Users/kchauhan/repos/clawfin/src/index.css)
+#### [NEW] [index.css](file:///Users/kchauhan/repos/autofin/src/index.css)
 The entire visual identity lives here. This is the most important file in the project.
 
 - **Color tokens**: ink backgrounds, teal accents, semantic colors for gain/loss/neutral
@@ -194,14 +194,14 @@ The entire visual identity lives here. This is the most important file in the pr
 
 ### 3. Data Layer
 
-#### [NEW] [schema.js](file:///Users/kchauhan/repos/clawfin/src/db/schema.js)
+#### [NEW] [schema.js](file:///Users/kchauhan/repos/autofin/src/db/schema.js)
 Dexie.js database definition:
 - `transactions`: date, amount, merchant, normalizedMerchant, category, account, source, currency, hash (for dedup)
 - `accounts`: id, institution, name, type, currency, balance
 - `snapshots`: date, netWorth, totalAssets, totalLiabilities
 - `categoryRules`: pattern (regex/string), category, priority
 
-#### [NEW] [ledger.js](file:///Users/kchauhan/repos/clawfin/src/store/ledger.js)
+#### [NEW] [ledger.js](file:///Users/kchauhan/repos/autofin/src/store/ledger.js)
 Zustand store providing:
 - Transaction CRUD with IndexedDB sync
 - Derived selectors: spending by category, monthly totals, trends, income vs. expense
@@ -212,21 +212,21 @@ Zustand store providing:
 
 ### 4. CSV Ingestion Pipeline
 
-#### [NEW] [parser.js](file:///Users/kchauhan/repos/clawfin/src/ingestion/parser.js)
+#### [NEW] [parser.js](file:///Users/kchauhan/repos/autofin/src/ingestion/parser.js)
 - Accepts raw CSV text, auto-detects bank from header row
 - Routes to the correct normalizer
 - Returns unified transaction array
 
-#### [NEW] Normalizers: [td.js](file:///Users/kchauhan/repos/clawfin/src/ingestion/normalizers/td.js), [rbc.js](file:///Users/kchauhan/repos/clawfin/src/ingestion/normalizers/rbc.js), etc.
+#### [NEW] Normalizers: [td.js](file:///Users/kchauhan/repos/autofin/src/ingestion/normalizers/td.js), [rbc.js](file:///Users/kchauhan/repos/autofin/src/ingestion/normalizers/rbc.js), etc.
 - Each normalizer maps bank-specific columns to the unified schema
 - Handles date format differences, sign conventions, description parsing
 
-#### [NEW] [categorizer.js](file:///Users/kchauhan/repos/clawfin/src/ingestion/categorizer.js)
+#### [NEW] [categorizer.js](file:///Users/kchauhan/repos/autofin/src/ingestion/categorizer.js)
 - Rule-based: match merchant strings against category patterns
 - Default categories: Groceries, Dining, Transit, Subscriptions, Housing, Utilities, Transfer, Income, Other
 - Returns categorized transactions
 
-#### [NEW] [dedup.js](file:///Users/kchauhan/repos/clawfin/src/ingestion/dedup.js)
+#### [NEW] [dedup.js](file:///Users/kchauhan/repos/autofin/src/ingestion/dedup.js)
 - Hash-based dedup: hash(date + amount + merchant + account)
 - Skips transactions already in the DB
 
@@ -265,7 +265,7 @@ Zustand store providing:
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│ ▸ ClawFin   │ Dashboard     │ 7d  30d [90d] YTD 1Y All │ ⬆ Import │
+│ ▸ AutoFin   │ Dashboard     │ 7d  30d [90d] YTD 1Y All │ ⬆ Import │
 ├─────────────┼───────────────────────────────────────────────────┤
 │             │ ┌──────────┐┌──────────┐┌──────────┐┌──────────┐ │
 │  ACCOUNTS   │ │ Income   ││ Expenses ││ Savings  ││ Net Worth│ │

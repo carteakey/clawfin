@@ -1,4 +1,4 @@
-# ClawFin — Implementation Plan (v3 · Final)
+# AutoFin — Implementation Plan (v3 · Final)
 
 ## Philosophy
 
@@ -17,7 +17,7 @@ Bloomberg Terminal meets personal finance. Dense, dark, monospace numbers, no wa
 | 3 | AI provider | All via litellm; default Ollama in Docker |
 | 4 | Database | SQLite (file-backed, volume mount) |
 | 5 | AI architecture | Built-in agent only (no MCP) |
-| 6 | Auth | Simple password gate via `CLAWFIN_PASSWORD` env var |
+| 6 | Auth | Simple password gate via `AUTOFIN_PASSWORD` env var |
 | 7 | Bank CSVs | All Big 5: TD, RBC, Scotiabank, BMO, CIBC |
 | 8 | Wealthsimple | Holdings (priority) + activity (both) |
 | 9 | Chat UI | Collapsible sidebar, ⌘K toggle |
@@ -56,7 +56,7 @@ Bloomberg Terminal meets personal finance. Dense, dark, monospace numbers, no wa
 │  │        └───────────────┴───────────────────┘              │ │
 │  │                        ↓                                   │ │
 │  │  ┌─────────────────────┴──────────────────────────────┐   │ │
-│  │  │  SQLite + SQLAlchemy  (volume: /data/clawfin.db)   │   │ │
+│  │  │  SQLite + SQLAlchemy  (volume: /data/autofin.db)   │   │ │
 │  │  └────────────────────────────────────────────────────┘   │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                 │
@@ -87,7 +87,7 @@ Bloomberg Terminal meets personal finance. Dense, dark, monospace numbers, no wa
 ## Repo Structure
 
 ```
-clawfin/
+autofin/
 ├── docker-compose.yml
 ├── Dockerfile.backend
 ├── Dockerfile.frontend
@@ -195,7 +195,7 @@ clawfin/
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────┐
-│ 🐾 ClawFin  │ Dashboard │ Holdings │ Transactions │ ⚙ │  ⬆ Import │ 💬 │
+│ AutoFin  │ Dashboard │ Holdings │ Transactions │ ⚙ │  ⬆ Import │ 💬 │
 ├─────────────┼─────────────────────────────────────────────┬───────────────┤
 │             │ ┌─────────┐┌─────────┐┌─────────┐┌───────┐ │ ░░░░░░░░░░░░ │
 │  ACCOUNTS   │ │ Income  ││Expenses ││Savings  ││ N.W.  │ │ ░ ⌘K CHAT  ░ │

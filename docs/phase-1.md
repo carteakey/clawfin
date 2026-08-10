@@ -1,6 +1,6 @@
-# ClawFin Phase 1 — Walkthrough
+# AutoFin Phase 1 — Walkthrough
 
-Phase 1 of ClawFin is officially complete! We've successfully transitioned from a complex, monolithic boilerplate to a lightweight, fast, and secure API-driven architecture that runs entirely on your local machine.
+Phase 1 of AutoFin is officially complete! We've successfully transitioned from a complex, monolithic boilerplate to a lightweight, fast, and secure API-driven architecture that runs entirely on your local machine.
 
 ## What Was Accomplished
 
@@ -10,8 +10,8 @@ We split the app into a true local-first appliance:
 - **Frontend (`/frontend`)**: A blazing-fast React 19 SPA built with Vite, utilizing Zustand for state management and styled with a custom Bloomberg-terminal-inspired "dense data" CSS framework.
 
 ### 2. Formidable Data Ingestion
-ClawFin now automatically ingests your entire financial picture securely:
-- **Canadian Auto-Detect CSV Parser**: Drop a CSV from TD, RBC, Scotiabank, BMO, or CIBC, and ClawFin instantly identifies the bank via header signatures, normalizes date parsing, and standardizes amounts.
+AutoFin now automatically ingests your entire financial picture securely:
+- **Canadian Auto-Detect CSV Parser**: Drop a CSV from TD, RBC, Scotiabank, BMO, or CIBC, and AutoFin instantly identifies the bank via header signatures, normalizes date parsing, and standardizes amounts.
 - **Wealthsimple Integration**: Supports both Holdings and Activity CSV exports. The Holdings parser seamlessly extracts security types, tickers, and handles dual-currency market/book values without breaking a sweat, taking advantage of the "As Of" footer dates.
 - **SimpleFin Sync**: Built a direct bridge client to import accounts and transactions seamlessly via the SimpleFin API (with a built-in mock mode for CI/CD).
 - **Bulletproof Deduplication**: Every incoming transaction generates a unique SHA-256 hash containing a per-day sequence counter. This guarantees that buying identical coffees on the same day won't cause deduplication collisions.
@@ -25,10 +25,10 @@ We ripped out the bloated `litellm` library in favor of a sleek, secure, depende
 
 ### 4. The Glass & Data Dashboard
 We implemented a stunning, high-density React frontend specifically designed for heavy data:
-- **The Brand Reality**: Fully translated the 7-color teal/ink `clawfin_brand.svg` logo into a comprehensive design system utilizing `Inter` for prose and `JetBrains Mono` for all tabular numbers.
+- **The Brand Reality**: The teal/ink palette is captured in `docs/style-guide.md` and translated into a comprehensive design system utilizing `Inter` for prose and `JetBrains Mono` for all tabular numbers.
 - **Dashboard**: Features a responsive KPI strip with automatic period-over-period percentage deltas, a visual spending breakdown by Top Categories / Top Merchants, and a beautiful daily `Recharts` spending bar graph.
 - **Holdings Explorer**: A dense, 32px-row table showing exact currency details, precise quantities, and color-coded total gains/losses.
-- **The ⌘K Sidebar**: A globally accessible UI layer where the ClawFin agent slides in from the right. It streams in real-time (SSE streaming) and understands the conversation history, allowing rapid "what if" scenarios based on your live SQLite data.
+- **The ⌘K Sidebar**: A globally accessible UI layer where the AutoFin agent slides in from the right. It streams in real-time (SSE streaming) and understands the conversation history, allowing rapid "what if" scenarios based on your live SQLite data.
 
 ## Docker Setup
 

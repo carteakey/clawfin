@@ -32,6 +32,26 @@ def get_db():
 
 
 def init_db():
-    """Create all tables."""
+    """Upgrade the database schema and apply idempotent data upgrades."""
     from backend.db import models  # noqa: F401 — ensures models are registered
-    Base.metadata.create_all(bind=engine)
+    from backend.db.migration import upgrade_database
+
+    upgrade_database(engine)
+    _encrypt_sensitive_config_values()
+
+
+def _encrypt_sensitive_config_values():
+    """Upgrade existing plaintext sensitive AppConfig values in-place."""
+    from backend.db.models import AppConfig
+    from backend.security import encrypt_value, is_encrypted
+
+    sensitive_keys = {"ai_api_key_override", "simplefin_access_url"}
+    with SessionLocal() as db:
+        changed = False
+        rows = db.query(AppConfig).filter(AppConfig.key.in_(sensitive_keys)).all()
+        for row in rows:
+            if row.value and not is_encrypted(row.value):
+                row.value = encrypt_value(row.value)
+                changed = True
+        if changed:
+            db.commit()

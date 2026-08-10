@@ -1,93 +1,206 @@
-# 🐾 ClawFin
+# AutoFin
 
-ClawFin is a privacy-first, self-hosted, AI-native personal finance dashboard tailored for Canadians. It offers a dense, Bloomberg-terminal-inspired "glass and data" aesthetic, focusing on speed, automated data ingestion, and a powerful conversational interface for querying your finances.
+AutoFin is a privacy-first, self-hosted, AI-native personal finance dashboard tailored for Canadians. Brutalist-minimalist UI with a teal accent, Bloomberg-terminal density, and a full command palette — built for speed, automated data ingestion, and conversational querying of your own ledger.
 
 <p align="center">
-  <img src="clawfin_brand.svg" width="200" alt="ClawFin Branding" />
+  <img src="assets/autofin-logo.png" width="420" alt="AutoFin logo" />
 </p>
 
-## ✨ Core Features
+## ✨ Features
 
-- **Canadian-First Ingestion**:
-  - Auto-detecting CSV parsers for the Big 5 (TD, RBC, Scotiabank, BMO, CIBC).
-  - Wealthsimple CSV integration (Holdings & Activity) with dual-currency Book/Market value tracking.
-- **Automated AI Categorization**:
-  - Uses a batch LLM pipeline to categorize merchants and caches results locally in SQLite.
-  - Regex fallback for known generic merchants to save API calls.
-- **Smart Data Sync**:
-  - Optional **SimpleFin** integration for continuous secure API syncing.
-  - Multi-currency support powered by the **Bank of Canada Valet API** (daily CAD/USD/EUR/GBP rates).
-  - SHA-256 transaction deduplication (with per-day sequence counters to allow identical same-day purchases).
-- **AI Agent (⌘K)**:
-  - A persistent, sliding chat sidebar with SSE (Server-Sent Events) streaming.
-  - Armed with 6 native data tools to query spending, calculate net worth, search transactions, and project investment growth securely without exposing raw DB access.
-  - Supports Ollama (local), Anthropic, and OpenAI architectures via a unified wire-format abstraction layer.
-- **Privacy by Design**:
-  - File-backed SQLite database.
-  - Simple `CLAWFIN_PASSWORD` gate for the entire UI.
-  - No bloated framework dependencies; direct `httpx` provider calls.
+- **Canadian-first ingestion**
+  - CSV parsers for the Big 5 (TD, RBC, Scotiabank, BMO, CIBC).
+  - Wealthsimple CSV (Holdings & Activity) with dual-currency book/market tracking.
+  - **SimpleFin** sync for continuous bank feeds. Captures `pending`, `memo`, `available_balance`, and `balance_date`.
+- **Accounts, Holdings, Transactions**
+  - `Accounts` view groups by institution with cash / credit / registered totals.
+  - `Holdings` lets you browse any historical **snapshot** you've imported (step prev/next or pick a date).
+  - `Transactions` has inline category reassign (saves a rule for next time), account filter chips, sortable columns, and pending markers.
+- **Recurring detection**
+  - Auto-detects monthly/weekly charges (subscriptions, EMIs, rent, insurance, bills).
+  - Classified by your own **Categories** — edit a row inline, it sticks.
+- **Planning**
+  - Net worth over time (Snapshot-backed or synthesized from posted transactions).
+  - 3-month cash-flow forecast from detected recurring charges.
+  - Cash-flow waterfall on the dashboard (income → categories → net).
+- **AI agent**
+  - Provider toggle (Ollama / OpenAI / Anthropic) — switch live, no restart.
+  - Ollama model dropdown auto-fills from `/api/tags`.
+  - Experimental AI categorization flag for auto-classifying new merchants.
+  - Tool-using agent with streaming chat.
+- **Command palette** — ⌘K opens it; arrow keys + Enter to navigate or run actions (Recategorize, Sync, Toggle theme). ⇧⌘K opens chat.
+- **Theme toggle** — dark terminal or light paper; persisted; follows `prefers-color-scheme` on first load.
+- **Privacy by design**
+  - File-backed SQLite. One password (`AUTOFIN_PASSWORD`) gates the UI.
+  - Download a full DB backup from Settings → Data.
+  - No bloated frameworks; direct `httpx` calls to AI providers.
 
 ## 🏗️ Architecture
 
-- **Backend**: Python 3.12, FastAPI, SQLAlchemy, Alembic (Migrations).
-- **Frontend**: React 19, Vite, Zustand (State), Recharts (Visuals), Lucide (Icons).
-- **Design System**: Custom CSS variables, dark-mode exclusive, custom Mono-fonts for dense tabular data.
+- **Backend**: Python 3.12, FastAPI, SQLAlchemy, SQLite.
+- **Frontend**: React 19, Vite, Zustand, Recharts. Inter + JetBrains Mono.
+- **Design**: brutalist minimalist. 1px hard rules, zero radii, zero shadows, teal accent.
 
 ## 🚀 Getting Started
 
-ClawFin is designed to be run as an appliance via Docker.
-
-### 1. Configure
-
-Copy the environment example and set your secure password:
+### Quickstart
 
 ```bash
 cp .env.example .env
 ```
-Edit `.env` to set:
-- `CLAWFIN_PASSWORD`: Your UI password.
-- `CLAWFIN_SECRET_KEY`: A long random string.
-- `CLAWFIN_AI_PROVIDER`: Choose `ollama`, `anthropic`, or `openai`.
 
-### 2. Run via Docker Compose
+Set the basics in `.env`:
 
-Run the standard stack (FastAPI Backend + Nginx Frontend):
 ```bash
-docker compose up -d
+AUTOFIN_PASSWORD=dev
+AUTOFIN_SECRET_KEY=<openssl-rand-hex-32>
+AUTOFIN_AUTOMATION_TOKEN=<openssl-rand-hex-32>
+AUTOFIN_AI_PROVIDER=ollama
+AUTOFIN_AI_MODEL=llama3.1
+AUTOFIN_AI_BASE_URL=http://ollama:11434
+AUTOFIN_SIMPLEFIN_STALE_DAYS=3
 ```
 
-To automatically spin up a local Ollama container alongside ClawFin:
+Run the app with Docker Compose:
+
 ```bash
+# Backend + frontend
+docker compose up -d
+
+# Backend + frontend + local Ollama
 docker compose --profile ai-local up -d
 ```
 
-### 3. Usage
+Open `http://localhost:3000` and log in with `AUTOFIN_PASSWORD`.
 
-1. Open `http://localhost:3000` (or `http://localhost:5174` if running `npm run dev` locally).
-2. Log in using your `CLAWFIN_PASSWORD`.
-3. Press **⌘K** to open the AI Chat, or navigate to **Settings** to ensure your LLM provider is connected.
-4. Drag and drop a bank CSV or Wealthsimple export into the **Import** tab.
+AutoFin logs a startup warning when `AUTOFIN_SECRET_KEY` is unset or still the development default. Replace it with a unique random value before storing real financial data; the key protects JWTs and encrypted local credentials.
+
+If you run Ollama outside Docker instead, set:
+
+```bash
+AUTOFIN_AI_BASE_URL=http://host.docker.internal:11434
+```
+
+To test AI briefings in the UI:
+
+1. Import transactions via CSV or sync SimpleFIN.
+2. Open chat with `⇧⌘K`.
+3. Use `Daily Brief`, `Weekly Brief`, or `Private Daily`.
+
+To smoke-test the automation endpoint:
+
+```bash
+curl -X POST http://localhost:8000/api/briefings/transactions \
+  -H "Content-Type: application/json" \
+  -H "X-AutoFin-Automation-Token: $AUTOFIN_AUTOMATION_TOKEN" \
+  -d '{"period":"daily","mode":"context","include_transactions":true}'
+```
+
+For local source development instead of Docker, use the commands in [Local Development](#%EF%B8%8F-local-development).
+
+Run verification before opening a PR:
+
+```bash
+PYTHONPATH=. pytest backend/tests -q
+cd frontend
+npm ci
+npm run build
+npm test -- --run
+npm audit --audit-level=high
+pip-audit -r backend/requirements.txt
+```
+
+### 1. Configure
+
+```bash
+cp .env.example .env
+```
+
+Set at minimum:
+- `AUTOFIN_PASSWORD` — UI password.
+- `AUTOFIN_SECRET_KEY` — random string (`openssl rand -hex 32`).
+- `AUTOFIN_AI_PROVIDER` — `ollama`, `openai`, or `anthropic` (switchable from the UI too).
+
+### 2. Run via Docker Compose
+
+```bash
+# Standard stack (backend + nginx frontend)
+docker compose up -d
+
+# Include a local Ollama sidecar
+docker compose --profile ai-local up -d
+```
+
+Open `http://localhost:3000`, log in, and import a CSV or connect SimpleFin.
+
+### 3. Keyboard shortcuts
+
+- `⌘K` — Command palette (nav, actions, search).
+- `⇧⌘K` — Ask AutoFin (chat).
 
 ## 🛠️ Local Development
 
-If you want to build and iterate on ClawFin without Docker:
+Use Python 3.12 and Node.js 24 for parity with CI.
 
-**Terminal 1 (Backend):**
+**Backend:**
 ```bash
-python3.11 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r backend/requirements.txt
-CLAWFIN_PASSWORD="dev" uvicorn backend.main:app --reload
+AUTOFIN_PASSWORD="dev" uvicorn backend.main:app --reload
 ```
 
-**Terminal 2 (Frontend):**
+**Frontend:**
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
-## 🗺️ Phase Roadmap
+**Tests:**
+```bash
+PYTHONPATH=. pytest backend/tests -q
+cd frontend
+npm test -- --run
+```
 
-- **Phase 1 (Current)**: Foundation, Data Ingestion, UI Dashboard, AI Tools, Docker.
-- **Phase 2 (Next)**: Automated Rule Management UI, Advanced Budgeting Goals, Multi-user support.
+## 📦 Data & Backups
+
+- SQLite DB at `~/.autofin/autofin.db` (host) or `/data/autofin.db` (Docker).
+- Alembic upgrades the schema to the latest revision when the backend starts.
+- Download a timestamped backup any time from **Settings → Data → Download Backup**.
+- For Docker, cron a host-side copy:
+  ```bash
+  docker exec autofin-backend-1 cp /data/autofin.db /data/backups/autofin-$(date +%F).db
+  ```
+
+Before upgrading AutoFin, download a backup from Settings, stop the backend, and retain the backup until the upgraded app has been verified. For a local install that is already stopped:
+
+```bash
+cp ~/.autofin/autofin.db ~/.autofin/autofin-before-upgrade.db
+```
+
+Migrations are forward-only. AutoFin does not automatically downgrade SQLite schemas because removing columns can destroy financial data; restore the pre-upgrade database backup if a rollback is required. To inspect or apply migrations manually from an activated virtual environment:
+
+```bash
+alembic current
+alembic upgrade head
+```
+
+CSV imports now show a bounded, write-free preview before commit. Review the parsed rows and warnings, then choose **Import rows**. Completed imports report inserted, duplicate-skipped, transfer-marked, and stale SimpleFin counts.
+
+Manual ledger entries support exact-amount splits, reversible category changes, rule-impact previews, merchant normalization/merging, and category suggestions. Split parents are hidden from budget totals so child allocations cannot double-count the source transaction.
+
+Briefing cadence, weekday, local time, and IANA timezone can be configured under **Settings → Briefings**. Scheduling remains external: cron/n8n should read `GET /api/settings/briefing-schedule` with the UI token, then call the automation endpoint with `X-AutoFin-Automation-Token`.
+
+## 🗺️ Roadmap
+
+- **v0.1** (current): Foundation, ingestion, dashboard, recurring detection, planning, AI agent, command palette, theme toggle, snapshot browsing, Alembic migrations, Docker.
+- **v0.2**: Budgeting + goals, multi-account reconciliation, saved chat threads, mobile-responsive layout.
+
+## 🔒 Hardening Before You Ship
+
+- Put it behind a reverse proxy with TLS (Caddy/Traefik/nginx). Don't expose `:3000`/`:8000` directly.
+- Rotate `AUTOFIN_SECRET_KEY` to a real random value.
+- Off-host DB backups on a schedule.
+- If using Ollama, keep it on the same private network as the backend.

@@ -3,24 +3,51 @@ import { api } from '../api/client';
 
 export const useStore = create((set, get) => ({
   // Auth
-  isAuthenticated: !!localStorage.getItem('clawfin_token'),
+  isAuthenticated: !!(localStorage.getItem('autofin_token') || localStorage.getItem('clawfin_token')),
   authRequired: null,
   setAuthenticated: (v) => set({ isAuthenticated: v }),
+
+  // Theme
+  theme: document.documentElement.dataset.theme || 'dark',
+  setTheme: (t) => {
+    document.documentElement.dataset.theme = t;
+    localStorage.setItem('autofin_theme', t);
+    set({ theme: t });
+  },
+  hideBalances: (localStorage.getItem('autofin_hide_balances') || localStorage.getItem('clawfin_hide_balances')) === 'true',
+  toggleHideBalances: () => set((s) => {
+    const next = !s.hideBalances;
+    localStorage.setItem('autofin_hide_balances', String(next));
+    return { hideBalances: next };
+  }),
 
   // Navigation
   currentView: 'dashboard',
   setView: (view) => set({ currentView: view }),
 
+  // Shared transient feedback surface. Components can still render inline
+  // details for long-running operations; toasts cover short confirmations.
+  toasts: [],
+  pushToast: (toast) => {
+    const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    set((s) => ({ toasts: [...s.toasts, { id, type: 'success', ...toast }] }));
+    window.setTimeout(() => set((s) => ({ toasts: s.toasts.filter((item) => item.id !== id) })), toast.duration || 4200);
+    return id;
+  },
+  dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((item) => item.id !== id) })),
+
   // Dashboard
   dashboard: null,
   dashboardLoading: false,
-  fetchDashboard: async (days = 30) => {
+  fetchDashboard: async (params = 30) => {
     set({ dashboardLoading: true });
-    const data = await api.getDashboard(days);
+    const data = await api.getDashboard(params);
     set({ dashboard: data, dashboardLoading: false });
   },
 
   // Transactions
+  selectedAccountId: '',
+  setSelectedAccountId: (id) => set({ selectedAccountId: id }),
   transactions: [],
   transactionsTotal: 0,
   transactionsLoading: false,
@@ -33,16 +60,23 @@ export const useStore = create((set, get) => ({
   // Holdings
   holdings: null,
   holdingsLoading: false,
-  fetchHoldings: async () => {
+  fetchHoldings: async (asOf) => {
     set({ holdingsLoading: true });
-    const data = await api.getHoldings();
+    const data = await api.getHoldings(asOf);
     set({ holdings: data, holdingsLoading: false });
   },
+
+  // Command palette
+  paletteOpen: false,
+  openPalette: () => set({ paletteOpen: true }),
+  closePalette: () => set({ paletteOpen: false }),
+  togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
 
   // Chat
   chatOpen: false,
   chatMessages: [],
   chatLoading: false,
+  clearChat: () => set({ chatMessages: [] }),
   toggleChat: () => set((s) => ({ chatOpen: !s.chatOpen })),
   sendMessage: async (message) => {
     const messages = [...get().chatMessages, { role: 'user', content: message }];
@@ -59,6 +93,23 @@ export const useStore = create((set, get) => ({
         fullResponse = resp.response || resp.error || 'No response';
         set({ chatMessages: [...messages, { role: 'assistant', content: fullResponse }] });
       }
+    } catch (e) {
+      set({ chatMessages: [...messages, { role: 'assistant', content: `Error: ${e.message}` }] });
+    }
+    set({ chatLoading: false });
+  },
+  sendBriefing: async ({ period }) => {
+    const label = `${period === 'weekly' ? 'Weekly' : 'Daily'} transaction briefing`;
+    const messages = [...get().chatMessages, { role: 'user', content: label }];
+    set({ chatMessages: messages, chatLoading: true });
+
+    try {
+      const resp = await api.chatBriefing({
+        period,
+        include_transactions: false,
+      });
+      const content = resp.summary || resp.error || 'No briefing generated';
+      set({ chatMessages: [...messages, { role: 'assistant', content }] });
     } catch (e) {
       set({ chatMessages: [...messages, { role: 'assistant', content: `Error: ${e.message}` }] });
     }

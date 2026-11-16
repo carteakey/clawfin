@@ -9,6 +9,18 @@ from backend.db.models import Holding, Account
 router = APIRouter()
 
 
+def latest_holdings(db: Session) -> list[Holding]:
+    """Holdings from the most recent snapshot date.
+
+    Holdings history is kept per as_of_date, so summing every row would count
+    each position once per imported snapshot.
+    """
+    latest = db.query(func.max(Holding.as_of_date)).scalar()
+    if latest is None:
+        return []
+    return db.query(Holding).filter(Holding.as_of_date == latest).all()
+
+
 @router.get("/dates")
 def list_snapshot_dates(db: Session = Depends(get_db)):
     """Distinct as_of_date values in the Holdings table, newest first."""

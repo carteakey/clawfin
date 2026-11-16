@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from backend.ai.briefings import build_transaction_briefing_context
 from backend.db.models import Transaction, Holding, Account, AccountType, Snapshot, Category
+from backend.routers.holdings import latest_holdings
 
 INVESTMENT_ACCOUNT_TYPES = {
     AccountType.TFSA,
@@ -156,6 +157,9 @@ def _query_spending(db: Session, category: str = None, merchant: str = None,
 
     if category:
         q = q.filter(Transaction.category == category)
+    else:
+        # Match the dashboard: internal transfers are not spending.
+        q = q.filter(or_(Transaction.category.is_(None), Transaction.category != "Transfer"))
     if merchant:
         q = q.filter(Transaction.merchant.ilike(f"%{merchant}%"))
 
@@ -205,7 +209,7 @@ def _get_account_balances(db: Session) -> dict:
 
 
 def _get_holdings(db: Session) -> dict:
-    holdings = db.query(Holding).all()
+    holdings = latest_holdings(db)
     result = []
     for h in holdings:
         gain = h.market_value - h.book_value
@@ -228,7 +232,7 @@ def _get_net_worth(db: Session) -> dict:
     accounts = db.query(Account).all()
     cash_assets = sum(a.balance for a in accounts if a.balance > 0)
     liabilities = abs(sum(a.balance for a in accounts if a.balance < 0))
-    holdings = db.query(Holding).all()
+    holdings = latest_holdings(db)
     holdings_market_value = sum(h.market_value for h in holdings)
 
     return {

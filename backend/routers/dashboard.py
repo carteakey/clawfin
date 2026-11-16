@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from backend.db.database import get_db
 from backend.db.models import Transaction, Account, AccountType, Holding, Snapshot
+from backend.routers.holdings import latest_holdings
 
 router = APIRouter()
 
@@ -69,7 +70,7 @@ def get_dashboard(
     # Account balance only. Holdings are reported separately to avoid double-counting
     # investment accounts that already sync as SimpleFIN account balances.
     accounts = db.query(Account).all()
-    holdings = db.query(Holding).all()
+    holdings = latest_holdings(db)
     total_accounts = sum(a.balance for a in accounts)
     total_holdings = sum(h.market_value for h in holdings)
 

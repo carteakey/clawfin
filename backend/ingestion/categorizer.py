@@ -97,11 +97,11 @@ DEFAULT_RULES = [
     # Income
     (r"payroll|salary|direct\s*deposit|employer|tax\s*refund|cra\s|cerb|ei\s*deposit|gst.*credit|canada\s*child|interest\s*paid|dividend", "Income"),
     # Entertainment
-    (r"cineplex|nintendo|steam|playstation|xbox|concert|ticket|event|museum|zoo|aquarium|ripley", "Entertainment"),
+    (r"cineplex|nintendo|steam|playstation|xbox|concert|ticket|\bevents?\b|museum|zoo|aquarium|ripley", "Entertainment"),
     # Health
-    (r"pharmacy|shoppers\s*drug|rexall|physiotherapy|dentist|doctor|clinic|hospital|drug\s*mart|lens|optom|chiropract", "Health"),
+    (r"pharmacy|shoppers\s*drug|rexall|physiotherapy|dentist|doctor|clinic|hospital|drug\s*mart|\blens(es)?\b|optom|chiropract", "Health"),
     # Shopping
-    (r"amazon(?!\s*prime)|best\s*buy|winners|marshalls|h&m|zara|uniqlo|old\s*navy|gap|indigo|chapters|sport\s*chek|nike|adidas|apple\s*store", "Shopping"),
+    (r"amazon(?!\s*prime)|best\s*buy|winners|marshalls|h&m|zara|uniqlo|old\s*navy|\bgap\b|indigo|chapters|sport\s*chek|nike|adidas|apple\s*store", "Shopping"),
 ]
 
 

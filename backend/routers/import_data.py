@@ -142,8 +142,17 @@ async def import_wealthsimple(
     if ws_type == "holdings":
         holdings = parse_holdings(header_row, rows)
 
-        # Clear existing holdings and replace (snapshot approach)
-        db.query(Holding).filter(Holding.source == DataSource.WEALTHSIMPLE).delete()
+        # Each export is a dated snapshot. Re-importing a date replaces that
+        # snapshot; older snapshots are kept so holdings history survives.
+        snapshot_dates = {
+            date.fromisoformat(h["as_of_date"]) if h.get("as_of_date") else date.today()
+            for h in holdings
+        }
+        if snapshot_dates:
+            db.query(Holding).filter(
+                Holding.source == DataSource.WEALTHSIMPLE,
+                Holding.as_of_date.in_(snapshot_dates),
+            ).delete(synchronize_session=False)
 
         for h in holdings:
             as_of = h.get("as_of_date")

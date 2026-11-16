@@ -1,7 +1,7 @@
 """Import API router — CSV upload, SimpleFin, Wealthsimple."""
 import csv
 import io
-from datetime import date
+from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -11,13 +11,56 @@ from backend.ingestion.parser import parse_csv
 from backend.ingestion.wealthsimple import parse_holdings, parse_activity, detect_wealthsimple_type
 from backend.ingestion.categorizer import categorize_transactions
 from backend.ingestion.dedup import dedup_transactions
+from backend.ingestion.transfer_detector import detect_internal_transfers
 from backend.ingestion.simplefin import SimpleFinClient
 from backend.config import settings
+from backend.db.models import AppConfig
+from backend.security import decrypt_value, encrypt_value
 
 router = APIRouter()
 
 
 # ─── CSV Import ──────────────────────────────────────────────────────
+
+@router.post("/csv/preview")
+async def preview_csv(
+    file: UploadFile = File(...),
+    bank_hint: str = Form(None),
+):
+    """Parse a CSV without writing anything and return a bounded review preview."""
+    content = await file.read()
+    try:
+        csv_text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="CSV must be UTF-8 encoded")
+    result = parse_csv(csv_text, bank_hint=bank_hint)
+    if result["error"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    rows = result.get("transactions") or []
+    preview_rows = [
+        {
+            "date": row.get("date"),
+            "amount": row.get("amount"),
+            "merchant": row.get("merchant"),
+            "category": row.get("category", "Other"),
+            "currency": row.get("currency", "CAD"),
+            "memo": row.get("memo"),
+        }
+        for row in rows[:50]
+    ]
+    warnings = []
+    if len(rows) > len(preview_rows):
+        warnings.append(f"Showing first {len(preview_rows)} of {len(rows)} parsed rows")
+    if not rows:
+        warnings.append("No transaction rows were detected")
+    return {
+        "bank": result.get("bank"),
+        "total_rows": result.get("row_count", len(rows)),
+        "parsed_rows": len(rows),
+        "preview": preview_rows,
+        "warnings": warnings,
+        "writes_database": False,
+    }
 
 @router.post("/csv")
 async def import_csv(
@@ -43,6 +86,9 @@ async def import_csv(
     # Dedup
     new_txs, skipped = dedup_transactions(transactions, db, account_id=account_id)
 
+    # Detect internal transfers (same amount, opposite sign, ≤2 days apart, different accounts)
+    transfers_marked = detect_internal_transfers(new_txs)
+
     # Insert
     for tx in new_txs:
         db.add(Transaction(
@@ -56,6 +102,8 @@ async def import_csv(
             hash=tx["hash"],
             sequence=tx.get("sequence", 0),
             description=tx.get("description"),
+            memo=tx.get("memo"),
+            category_reason=tx.get("category_reason") or "import",
         ))
 
     db.commit()
@@ -64,6 +112,10 @@ async def import_csv(
         "bank": result["bank"],
         "imported": len(new_txs),
         "skipped": skipped,
+        "skipped_reasons": {"duplicate": skipped} if skipped else {},
+        "duplicates_skipped": skipped,
+        "transfers_marked": transfers_marked,
+        "transfer_marked_count": transfers_marked,
         "total_rows": result["row_count"],
     }
 
@@ -125,10 +177,17 @@ async def import_wealthsimple(
                 hash=tx["hash"],
                 sequence=tx.get("sequence", 0),
                 description=tx.get("description"),
+                category_reason=tx.get("category_reason") or "import",
             ))
 
         db.commit()
-        return {"type": "activity", "imported": len(new_txs), "skipped": skipped}
+        return {
+            "type": "activity",
+            "imported": len(new_txs),
+            "skipped": skipped,
+            "skipped_reasons": {"duplicate": skipped} if skipped else {},
+            "duplicates_skipped": skipped,
+        }
 
     else:
         raise HTTPException(status_code=400, detail="Could not detect Wealthsimple export type")
@@ -141,45 +200,103 @@ class SimpleFinSetup(BaseModel):
 
 
 @router.post("/simplefin/setup")
-async def simplefin_setup(req: SimpleFinSetup):
+async def simplefin_setup(req: SimpleFinSetup, db: Session = Depends(get_db)):
     try:
         access_url = await SimpleFinClient.exchange_setup_token(req.setup_token)
-        # In production, store encrypted. For now, return it.
-        return {"access_url": access_url, "status": "connected"}
+        row = db.query(AppConfig).filter(AppConfig.key == "simplefin_access_url").first()
+        if row:
+            row.value = encrypt_value(access_url)
+        else:
+            db.add(AppConfig(key="simplefin_access_url", value=encrypt_value(access_url)))
+        db.commit()
+        return {"status": "connected", "is_configured": True}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"SimpleFin setup failed: {str(e)}")
 
+@router.get("/simplefin/status")
+async def simplefin_status(db: Session = Depends(get_db)):
+    access_url = _get_simplefin_access_url(db)
+    return {
+        "is_configured": bool(access_url),
+        "source": "env" if settings.SIMPLEFIN_ACCESS_URL else ("database" if access_url else None),
+    }
 
 @router.post("/simplefin/sync")
 async def simplefin_sync(db: Session = Depends(get_db)):
-    access_url = settings.SIMPLEFIN_ACCESS_URL
+    access_url = _get_simplefin_access_url(db)
     if not access_url:
-        raise HTTPException(status_code=400, detail="SimpleFin not configured. Set CLAWFIN_SIMPLEFIN_ACCESS_URL.")
+        raise HTTPException(status_code=400, detail="SimpleFin not configured. Connect SimpleFin or set AUTOFIN_SIMPLEFIN_ACCESS_URL.")
 
-    from datetime import timedelta
     client = SimpleFinClient(access_url)
+    sync_started_at = datetime.utcnow()
     start_date = date.today() - timedelta(days=90)
-    raw_data = await client.fetch_accounts(start_date=start_date)
+    try:
+        raw_data = await client.fetch_accounts(start_date=start_date)
+    except Exception as e:
+        error = str(e)[:1000]
+        for account in db.query(Account).filter(Account.source == DataSource.SIMPLEFIN).all():
+            account.last_sync_at = sync_started_at
+            account.last_sync_error = error
+            account.stale_reason = _simplefin_stale_reason(
+                account,
+                today=date.today(),
+                sync_error=error,
+                account_present=bool(account.simplefin_account_present),
+            )
+        db.commit()
+        raise HTTPException(status_code=502, detail=f"SimpleFin sync failed: {error}")
 
     # Sync accounts
     sf_accounts = client.normalize_accounts(raw_data)
+    seen_external_ids = {acct["external_id"] for acct in sf_accounts}
+    latest_tx_by_external_id = _latest_simplefin_transaction_dates(raw_data)
     account_map = {}  # external_id -> db account_id
 
+    for account in db.query(Account).filter(Account.source == DataSource.SIMPLEFIN).all():
+        account.last_sync_at = sync_started_at
+        account.simplefin_account_present = account.external_id in seen_external_ids
+        if not account.simplefin_account_present:
+            account.stale_reason = "missing_from_simplefin_response"
+
     for acct in sf_accounts:
+        inferred = acct.get("account_type", "other")
+        try:
+            acct_type = AccountType(inferred)
+        except ValueError:
+            acct_type = AccountType.OTHER
         existing = db.query(Account).filter(Account.external_id == acct["external_id"]).first()
         if existing:
             existing.balance = acct["balance"]
+            existing.available_balance = acct.get("available_balance")
+            existing.balance_date = acct.get("balance_date")
+            existing.last_sync_at = sync_started_at
+            existing.last_successful_balance_date = acct.get("balance_date")
+            existing.last_successful_transaction_date = latest_tx_by_external_id.get(acct["external_id"])
+            existing.last_sync_error = None
+            existing.simplefin_account_present = True
+            existing.stale_reason = _simplefin_stale_reason(existing, today=date.today())
+            # Only backfill type if it was the default chequing (i.e. previously imported with hardcoded type)
+            if existing.account_type == AccountType.CHEQUING and acct_type != AccountType.CHEQUING:
+                existing.account_type = acct_type
             account_map[acct["external_id"]] = existing.id
         else:
             new_acct = Account(
                 institution=acct["institution"],
                 name=acct["name"],
-                account_type=AccountType.CHEQUING,  # Default; user can change
+                account_type=acct_type,
                 currency=acct["currency"],
                 balance=acct["balance"],
+                available_balance=acct.get("available_balance"),
+                balance_date=acct.get("balance_date"),
                 source=DataSource.SIMPLEFIN,
                 external_id=acct["external_id"],
+                last_sync_at=sync_started_at,
+                last_successful_balance_date=acct.get("balance_date"),
+                last_successful_transaction_date=latest_tx_by_external_id.get(acct["external_id"]),
+                last_sync_error=None,
+                simplefin_account_present=True,
             )
+            new_acct.stale_reason = _simplefin_stale_reason(new_acct, today=date.today())
             db.add(new_acct)
             db.flush()
             account_map[acct["external_id"]] = new_acct.id
@@ -191,6 +308,22 @@ async def simplefin_sync(db: Session = Depends(get_db)):
 
     categorize_transactions(sf_transactions, db)
     new_txs, skipped = dedup_transactions(sf_transactions, db)
+
+    # Detect internal transfers — also match against recent committed transactions
+    # (SimpleFIN syncs are incremental; the counterpart may already be in the DB)
+    lookback = date.today() - timedelta(days=5)
+    recent_committed = [
+        {
+            "amount": t.amount,
+            "date": t.date.isoformat(),
+            "account_id": t.account_id,
+            "category": t.category,
+        }
+        for t in db.query(Transaction)
+        .filter(Transaction.date >= lookback, Transaction.category != "Transfer")
+        .all()
+    ]
+    transfers_marked = detect_internal_transfers(new_txs, existing_txs=recent_committed)
 
     for tx in new_txs:
         db.add(Transaction(
@@ -204,6 +337,8 @@ async def simplefin_sync(db: Session = Depends(get_db)):
             hash=tx["hash"],
             sequence=tx.get("sequence", 0),
             description=tx.get("description"),
+            memo=tx.get("memo"),
+            pending=tx.get("pending", False),
         ))
 
     db.commit()
@@ -212,4 +347,62 @@ async def simplefin_sync(db: Session = Depends(get_db)):
         "accounts_synced": len(sf_accounts),
         "imported": len(new_txs),
         "skipped": skipped,
+        "stale_accounts": [
+            {
+                "id": account.id,
+                "name": account.name,
+                "institution": account.institution,
+                "stale_reason": account.stale_reason,
+                "last_sync_error": account.last_sync_error,
+                "simplefin_account_present": bool(account.simplefin_account_present),
+            }
+            for account in db.query(Account)
+            .filter(Account.source == DataSource.SIMPLEFIN, Account.stale_reason.isnot(None))
+            .order_by(Account.institution, Account.name)
+            .all()
+        ],
     }
+
+
+def _get_simplefin_access_url(db: Session) -> str:
+    if settings.SIMPLEFIN_ACCESS_URL:
+        return settings.SIMPLEFIN_ACCESS_URL
+    row = db.query(AppConfig).filter(AppConfig.key == "simplefin_access_url").first()
+    if not row:
+        return ""
+    return decrypt_value(row.value) or ""
+
+
+def _latest_simplefin_transaction_dates(raw_data: dict) -> dict[str, date]:
+    latest: dict[str, date] = {}
+    for account in raw_data.get("accounts", []):
+        external_id = account.get("id", "")
+        for tx in account.get("transactions", []):
+            posted = tx.get("posted", 0) or tx.get("transacted_at", 0)
+            if not posted:
+                continue
+            tx_date = datetime.fromtimestamp(posted).date()
+            if external_id and (external_id not in latest or tx_date > latest[external_id]):
+                latest[external_id] = tx_date
+    return latest
+
+
+def _simplefin_stale_reason(
+    account: Account,
+    today: date,
+    sync_error: str | None = None,
+    account_present: bool = True,
+) -> str | None:
+    if sync_error:
+        lowered = sync_error.lower()
+        if any(token in lowered for token in ("401", "403", "unauthorized", "forbidden", "auth")):
+            return "simplefin_auth_error"
+        return "simplefin_sync_error"
+    if not account_present:
+        return "missing_from_simplefin_response"
+
+    if not account.last_sync_at:
+        return "never_synced"
+    if (today - account.last_sync_at.date()).days >= settings.SIMPLEFIN_STALE_DAYS:
+        return "simplefin_sync_stale"
+    return None

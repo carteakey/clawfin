@@ -1,0 +1,1 @@
+"""AutoFin Alembic migration environment."""

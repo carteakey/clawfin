@@ -1,18 +1,18 @@
-# ClawFin 🐾
-### Your AI grip on Canadian finances
+# AutoFin
+### Automated AI finance for Canadians
 
 ---
 
-## What is ClawFin?
+## What is AutoFin?
 
-ClawFin is a personal AI finance hub built for Canadians. It connects your real bank accounts, investment holdings, and legacy transaction history into a single unified ledger — then puts an AI agent on top so you can ask questions, run simulations, and get smart reports without ever opening a spreadsheet.
+AutoFin is a personal AI finance hub built for Canadians. It connects your real bank accounts, investment holdings, and legacy transaction history into a single unified ledger — then puts an AI agent on top so you can ask questions, run simulations, and get smart reports without ever opening a spreadsheet.
 
 ---
 
 ## Brand
 
-**Name:** ClawFin  
-**Tagline:** Your AI grip on Canadian finances  
+**Name:** AutoFin  
+**Tagline:** Automated AI finance for Canadians  
 **Logo concept:** Three diagonal claw strokes (bear/eagle claw) doubling as an upward chart  
 **Primary colour:** Teal green `#1D9E75` — money without being banker-blue  
 **Palette:** Teal · Dark teal · Ink · Muted gray  
@@ -31,12 +31,12 @@ ClawFin is a personal AI finance hub built for Canadians. It connects your real 
 ### Wealthsimple
 - No public API — export-based workflow
 - User exports CSV / PDF holding reports periodically
-- ClawFin parses and tracks portfolio over time
+- AutoFin parses and tracks portfolio over time
 - Supports TFSA, RRSP, FHSA, margin accounts
 
 ### Bank CSVs
 - Manual export from TD, RBC, Scotiabank, BMO, CIBC, etc.
-- ClawFin normalizes each bank's format into a unified schema
+- AutoFin normalizes each bank's format into a unified schema
 - Deduplication handled automatically across sources
 
 ### Future sources
@@ -119,7 +119,7 @@ Everything funnels into a single unified ledger:
 
 ## AI Agent — What You Can Ask
 
-The ClawFin AI agent has full read access to your unified ledger and can answer natural language questions, run simulations, and generate reports on demand.
+The AutoFin AI agent has full read access to your unified ledger and can answer natural language questions, run simulations, and generate reports on demand.
 
 **Spending questions**
 - "How much did I spend on eating out last quarter?"
@@ -136,7 +136,7 @@ The ClawFin AI agent has full read access to your unified ledger and can answer 
 - "If I cut dining out by half, how much extra could I invest per year?"
 - "Show me my TFSA balance at 65 if I max it every year from now."
 
-**Read + simulate only** — ClawFin never executes trades or transfers. You get the insight, you take the action.
+**Read + simulate only** — AutoFin never executes trades or transfers. You get the insight, you take the action.
 
 ---
 
@@ -195,14 +195,14 @@ Manual CSV upload for now. A browser-based scraper is possible but sits in a gre
 TFSA/RRSP/FHSA room tracking is in scope from Phase 1. ACB tracking for capital gains in Phase 2. Full tax report generation (T5, T3) is Phase 4+.
 
 **AI safety boundary**  
-Read and simulate only. No trade execution, no bank transfers, no write access to any financial account. ClawFin is a co-pilot, not an autopilot.
+Read and simulate only. No trade execution, no bank transfers, no write access to any financial account. AutoFin is a co-pilot, not an autopilot.
 
 ---
 
 ## Repo Structure (proposed)
 
 ```
-clawfin/
+autofin/
 ├── ingestion/
 │   ├── simplefin.py        # SimpleFin Bridge API client
 │   ├── wealthsimple.py     # CSV/PDF parser
@@ -231,7 +231,7 @@ clawfin/
 
 ---
 
-## What Makes ClawFin Different
+## What Makes AutoFin Different
 
 - **Canadian-first** — TFSA, RRSP, FHSA, ACB, CAD/USD handling built in from day one
 - **AI that knows your numbers** — not generic advice, answers grounded in your actual data
@@ -241,4 +241,4 @@ clawfin/
 
 ---
 
-*ClawFin — get a grip on your money.*
+*AutoFin — automate your money insight.*

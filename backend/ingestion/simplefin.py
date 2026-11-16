@@ -93,15 +93,36 @@ class SimpleFinClient:
             return response.json()
 
     @staticmethod
+    def _infer_type(name: str) -> str:
+        """Infer AccountType from the account name. SimpleFin doesn't expose type."""
+        n = (name or "").upper()
+        if "TFSA" in n: return "tfsa"
+        if "RRSP" in n: return "rrsp"
+        if "FHSA" in n: return "fhsa"
+        if "CRYPTO" in n: return "crypto"
+        if any(k in n for k in ("VISA", "MASTERCARD", "AMEX", "AMERICAN EXPRESS", "CARD", "MBNA", "ROGERS RED")):
+            return "credit_card"
+        if "SAVINGS" in n: return "savings"
+        if "CHEQUING" in n or "CHECKING" in n or "CHEQUE" in n: return "chequing"
+        if "MARGIN" in n or "NON_REGISTERED" in n or "NON-REGISTERED" in n: return "margin"
+        return "other"
+
+    @staticmethod
     def normalize_accounts(raw_data: dict) -> list[dict]:
         """Convert SimpleFin response to our Account format."""
         accounts = []
         for acct in raw_data.get("accounts", []):
             org_name = acct.get("org", {}).get("name", "Unknown")
+            avail = acct.get("available-balance")
+            bal_date = acct.get("balance-date")
+            name = acct.get("name", "Account")
             accounts.append({
                 "institution": org_name,
-                "name": acct.get("name", "Account"),
+                "name": name,
+                "account_type": SimpleFinClient._infer_type(name),
                 "balance": float(acct.get("balance", 0)),
+                "available_balance": float(avail) if avail is not None else None,
+                "balance_date": datetime.fromtimestamp(int(bal_date)) if bal_date else None,
                 "currency": acct.get("currency", "CAD").upper(),
                 "external_id": acct.get("id", ""),
                 "source": "simplefin",
@@ -117,12 +138,14 @@ class SimpleFinClient:
             currency = acct.get("currency", "CAD").upper()
 
             for tx in acct.get("transactions", []):
-                posted = tx.get("posted", 0)
+                posted = tx.get("posted", 0) or tx.get("transacted_at", 0)
                 tx_date = datetime.fromtimestamp(posted).date() if posted else date.today()
 
                 amount = float(tx.get("amount", 0))
                 description = tx.get("description", "").strip()
                 merchant = tx.get("payee", description).strip() or description
+                memo = (tx.get("memo") or "").strip() or None
+                pending = bool(tx.get("pending", False))
 
                 transactions.append({
                     "date": tx_date.isoformat(),
@@ -130,6 +153,8 @@ class SimpleFinClient:
                     "merchant": merchant,
                     "currency": currency,
                     "description": description,
+                    "memo": memo,
+                    "pending": pending,
                     "source": "simplefin",
                     "external_account_id": acct_id,
                 })

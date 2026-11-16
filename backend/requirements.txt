@@ -6,7 +6,8 @@ python-multipart>=0.0.18
 httpx>=0.28.0
 python-dotenv>=1.0.0
 passlib>=1.7.4
-python-jose[cryptography]>=3.3.0
+PyJWT>=2.10.1
+cryptography>=43.0.0
 
 # Testing
 pytest>=8.0.0

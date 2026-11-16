@@ -8,30 +8,94 @@ Strategy:
 4. Store results as new CategoryRules for future cache hits
 5. Fall back to rule-based regex if no AI provider configured
 """
+import asyncio
+import json
 import re
 from sqlalchemy.orm import Session
 from backend.db.models import CategoryRule, Category, DEFAULT_CATEGORIES
+
+
+def ai_categorize_batch(merchants: list[str], categories: list[str]) -> dict[str, str]:
+    """
+    Call the configured AI provider to classify merchants.
+    Returns {merchant: category} for merchants the LLM felt confident about.
+    Gracefully returns {} on any error.
+    """
+    from backend.ai import provider
+
+    if not merchants:
+        return {}
+
+    prompt = (
+        "Classify each merchant name into exactly one of the allowed categories. "
+        "Return JSON only, no prose, shaped as {\"merchant\": \"Category\", ...}.\n\n"
+        f"Allowed categories: {', '.join(categories)}\n\n"
+        f"Merchants: {json.dumps(merchants)}"
+    )
+
+    try:
+        resp = asyncio.run(provider.chat_completion(
+            messages=[
+                {"role": "system", "content": "You classify merchant names into finance categories. Return JSON only."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.0,
+        ))
+    except Exception:
+        return {}
+
+    content = (resp.get("content") or "").strip()
+    # Be tolerant of code fences
+    if content.startswith("```"):
+        content = content.split("```", 2)[-1].strip()
+        if content.startswith("json"):
+            content = content[4:].strip()
+        content = content.rsplit("```", 1)[0].strip()
+
+    try:
+        data = json.loads(content)
+    except Exception:
+        start = content.find("{")
+        end = content.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            return {}
+        try:
+            data = json.loads(content[start:end + 1])
+        except Exception:
+            return {}
+
+    if not isinstance(data, dict):
+        return {}
+    return {str(k).strip().lower(): str(v) for k, v in data.items() if v in categories}
 
 
 # ─── Rule-based fallback patterns ────────────────────────────────────
 
 DEFAULT_RULES = [
     # Groceries
-    (r"loblaws|no\s*frills|superstore|metro|sobeys|freshco|food\s*basics|walmart\s*super|costco|t&t|farm\s*boy|whole\s*foods|longos", "Groceries"),
+    (r"loblaws|no\s*frills|superstore|metro|sobeys|freshco|food\s*basics|walmart\s*super|costco|t&t|farm\s*boy|whole\s*foods|longos|save[-\s]?on[-\s]?foods|safeway|fortinos|zehrs|galleria|h\s*mart", "Groceries"),
     # Dining
-    (r"uber\s*eats|doordash|skip\s*the\s*dishes|mcdonald|tim\s*horton|starbucks|restaurant|pizza|sushi|cafe|coffee|shawarma|burrito|subway|popeyes|wendy|a&w|dairy\s*queen|boston\s*pizza", "Dining"),
+    (r"uber\s*eats|doordash|skip\s*the\s*dishes|mcdonald|tim\s*horton|starbucks|restaurant|pizza|sushi|cafe|coffee|shawarma|burrito|subway|popeyes|wendy|a&w|dairy\s*queen|boston\s*pizza|chipotle|osmow|kinton|ramen|bar\s|pub\s", "Dining"),
     # Transit
-    (r"presto|uber\s+(?!eats)|lyft|ttc|transit|parking|gas\s*station|petro|shell|esso|canadian\s*tire\s*gas|go\s*transit", "Transit"),
+    (r"presto|uber\s+(?!eats)|lyft|ttc|transit|parking|gas\s*station|petro|shell|esso|canadian\s*tire\s*gas|go\s*transit|via\s*rail|up\s*express|car2go|zipcar", "Transit"),
     # Subscriptions
-    (r"netflix|spotify|apple\.com|google\s*(play|storage)|amazon\s*prime|disney|youtube|hbo|crave|audible|dropbox|icloud|microsoft\s*365", "Subscriptions"),
+    (r"netflix|spotify|apple\.com|google\s*(play|storage)|amazon\s*prime|disney|youtube|hbo|crave|audible|dropbox|icloud|microsoft\s*365|github|notion|figma|adobe|chatgpt|openai|claude|anthropic|patreon|substack|zoom|slack", "Subscriptions"),
+    # Rent
+    (r"\brent\b|landlord|property\s*management|rentpayment", "Rent"),
     # Housing
-    (r"rent|mortgage|property\s*tax|home\s*depot|ikea|wayfair|structube|canadian\s*tire(?!\s*gas)|rona|lowes", "Housing"),
+    (r"mortgage|property\s*tax|home\s*depot|ikea|wayfair|structube|canadian\s*tire(?!\s*gas)|rona|lowes", "Housing"),
     # Utilities
-    (r"hydro|enbridge|toronto\s*hydro|alectra|rogers|bell\s*(?!.*restaurant)|telus|fido|koodo|virgin\s*plus|teksavvy|internet|phone\s*bill", "Utilities"),
+    (r"hydro|enbridge|toronto\s*hydro|alectra|rogers|bell\s*(?!.*restaurant)|telus|fido|koodo|virgin\s*plus|teksavvy|internet|phone\s*bill|freedom\s*mobile|public\s*mobile|water\s*bill", "Utilities"),
+    # Insurance
+    (r"insurance|manulife|sunlife|intact|td\s*insurance|life\s*policy|security\s*national", "Insurance"),
+    # Loan / installments
+    (r"installment|instalment|\bloan\b|\bemi\b|membership\s*fee\s*installment|financ", "Loan"),
+    # Fees
+    (r"\bfee\b|service\s*charge|overdraft|nsf|atm\s*fee|interest\s*charge|monthly\s*account\s*fee|foreign\s*transaction", "Fees"),
     # Transfer
-    (r"e-?transfer|transfer|payment\s*-\s*thank|autopay|payroll|interac\s*e-?transfer", "Transfer"),
+    (r"e-?transfer|transfer|payment\s*-\s*thank|autopay|interac\s*e-?transfer", "Transfer"),
     # Income
-    (r"payroll|salary|direct\s*deposit|employer|tax\s*refund|cerb|ei\s*deposit|gst.*credit|canada\s*child", "Income"),
+    (r"payroll|salary|direct\s*deposit|employer|tax\s*refund|cra\s|cerb|ei\s*deposit|gst.*credit|canada\s*child|interest\s*paid|dividend", "Income"),
     # Entertainment
     (r"cineplex|nintendo|steam|playstation|xbox|concert|ticket|event|museum|zoo|aquarium|ripley", "Entertainment"),
     # Health
@@ -55,7 +119,7 @@ def categorize_transactions(
     """
     # Get all existing rules from DB
     rules = db.query(CategoryRule).order_by(CategoryRule.priority.desc()).all()
-    rule_cache = {r.pattern.lower(): r.category for r in rules}
+    rule_cache = {r.pattern.lower(): r.category for r in rules if not r.is_regex}
 
     # Get valid category names
     categories = db.query(Category).all()
@@ -70,11 +134,34 @@ def categorize_transactions(
         merchant = tx.get("merchant", "").strip().lower()
         if not merchant:
             tx["category"] = "Other"
+            tx["category_reason"] = "default"
             continue
 
         # Check rule cache first
         if merchant in rule_cache:
             tx["category"] = rule_cache[merchant]
+            tx["category_reason"] = "rule"
+            continue
+
+        # Then user-managed rules. Plain rules match as substrings so users can
+        # handle noisy merchant suffixes; regex rules are opt-in.
+        matched_rule = False
+        for rule in rules:
+            pattern = (rule.pattern or "").strip().lower()
+            if not pattern:
+                continue
+            try:
+                if (rule.is_regex and re.search(pattern, merchant, re.IGNORECASE)) or (
+                    not rule.is_regex and pattern in merchant
+                ):
+                    tx["category"] = rule.category
+                    tx["category_reason"] = "rule"
+                    rule_cache[merchant] = rule.category
+                    matched_rule = True
+                    break
+            except re.error:
+                continue
+        if matched_rule:
             continue
 
         # Check regex rules
@@ -82,6 +169,7 @@ def categorize_transactions(
         for pattern, category in DEFAULT_RULES:
             if re.search(pattern, merchant, re.IGNORECASE):
                 tx["category"] = category
+                tx["category_reason"] = "default_rule"
                 rule_cache[merchant] = category
                 matched = True
                 break
@@ -89,6 +177,7 @@ def categorize_transactions(
         if not matched:
             uncategorized_merchants.add(merchant)
             tx["category"] = "Other"  # default, may be overridden by AI
+            tx["category_reason"] = "default"
 
     # Batch AI categorization for unknowns
     if uncategorized_merchants and ai_categorize_fn:
@@ -115,6 +204,7 @@ def categorize_transactions(
                     merchant = tx.get("merchant", "").strip().lower()
                     if merchant in rule_cache and tx["category"] == "Other":
                         tx["category"] = rule_cache[merchant]
+                        tx["category_reason"] = "ai"
 
                 db.commit()
         except Exception:

@@ -1,9 +1,12 @@
 /**
- * ClawFin API client — talks to the FastAPI backend.
+ * AutoFin API client — talks to the FastAPI backend.
  */
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
-let authToken = localStorage.getItem('clawfin_token');
+let authToken = localStorage.getItem('autofin_token') || localStorage.getItem('clawfin_token');
+if (!localStorage.getItem('autofin_token') && authToken) {
+  localStorage.setItem('autofin_token', authToken);
+}
 
 async function request(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
@@ -12,6 +15,7 @@ async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
   if (res.status === 401) {
+    localStorage.removeItem('autofin_token');
     localStorage.removeItem('clawfin_token');
     authToken = null;
     window.location.reload();
@@ -36,7 +40,16 @@ export const api = {
   login: (password) => request('/auth/login', { method: 'POST', body: JSON.stringify({ password }) }),
 
   // Dashboard
-  getDashboard: (days = 30) => request(`/dashboard?days=${days}`),
+  getDashboard: (params = 30) => {
+    const query = typeof params === 'object'
+      ? new URLSearchParams(Object.fromEntries(
+        Object.entries(params).filter(([_, v]) => v !== undefined && v !== null && v !== '')
+      )).toString()
+      : new URLSearchParams({ days: params }).toString();
+    return request(`/dashboard?${query}`);
+  },
+  getNetWorth: (period = '1Y') => request(`/dashboard/net-worth?period=${period}`),
+  getCashflowForecast: (months = 3) => request(`/dashboard/cashflow-forecast?months=${months}`),
 
   // Transactions
   getTransactions: (params = {}) => {
@@ -47,19 +60,57 @@ export const api = {
     return request(`/transactions?${qs}`);
   },
   updateTransaction: (id, data) => request(`/transactions/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  createTransaction: (data) => request('/transactions', { method: 'POST', body: JSON.stringify(data) }),
+  deleteTransaction: (id) => request(`/transactions/${id}`, { method: 'DELETE' }),
+  splitTransaction: (id, allocations) => request(`/transactions/${id}/split`, { method: 'POST', body: JSON.stringify({ allocations }) }),
+  getCategorySuggestions: (merchant) => request(`/transactions/category-suggestions?merchant=${encodeURIComponent(merchant || '')}`),
+  bulkTransactions: (data) => request('/transactions/bulk', { method: 'POST', body: JSON.stringify(data) }),
+  exportTransactionsUrl: (params = {}) => {
+    const cleanParams = Object.fromEntries(
+      Object.entries(params).filter(([_, v]) => v !== undefined && v !== null && v !== '')
+    );
+    const qs = new URLSearchParams(cleanParams).toString();
+    return `${API_BASE}/transactions/export.csv${qs ? `?${qs}` : ''}`;
+  },
+  getAccounts: () => request('/transactions/accounts'),
+  createAccount: (data) => request('/transactions/accounts', { method: 'POST', body: JSON.stringify(data) }),
+  updateAccount: (id, data) => request(`/transactions/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteAccount: (id) => request(`/transactions/accounts/${id}`, { method: 'DELETE' }),
+  reinferAccountTypes: () => request('/transactions/accounts/reinfer-types', { method: 'POST' }),
+  redetectTransfers: (days = null) => {
+    const qs = days ? `?days=${days}` : '';
+    return request(`/transactions/redetect-transfers${qs}`, { method: 'POST' });
+  },
+  getRecurring: () => request('/transactions/recurring'),
+  exportDatabase: () => request('/settings/export'),
+  getBriefingSchedule: () => request('/settings/briefing-schedule'),
+  updateBriefingSchedule: (data) => request('/settings/briefing-schedule', { method: 'PUT', body: JSON.stringify(data) }),
 
   // Holdings
-  getHoldings: () => request('/holdings'),
+  getHoldings: (asOf) => request(asOf ? `/holdings?as_of=${asOf}` : '/holdings'),
+  getHoldingsDates: () => request('/holdings/dates'),
 
   // Import
-  uploadCSV: async (file, bankHint = null) => {
+  uploadCSV: async (file, accountId = null, bankHint = null) => {
     const form = new FormData();
     form.append('file', file);
+    if (accountId) form.append('account_id', accountId);
     if (bankHint) form.append('bank_hint', bankHint);
     const headers = {};
     if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
     const res = await fetch(`${API_BASE}/import/csv`, { method: 'POST', headers, body: form });
     return res.json();
+  },
+  previewCSV: async (file, bankHint = null) => {
+    const form = new FormData();
+    form.append('file', file);
+    if (bankHint) form.append('bank_hint', bankHint);
+    const headers = {};
+    if (authToken) headers.Authorization = `Bearer ${authToken}`;
+    const res = await fetch(`${API_BASE}/import/csv/preview`, { method: 'POST', headers, body: form });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `HTTP Error ${res.status}`);
+    return data;
   },
   uploadWealthsimple: async (file) => {
     const form = new FormData();
@@ -69,11 +120,13 @@ export const api = {
     const res = await fetch(`${API_BASE}/import/wealthsimple`, { method: 'POST', headers, body: form });
     return res.json();
   },
+  simpleFinStatus: () => request('/import/simplefin/status'),
   simpleFinSetup: (token) => request('/import/simplefin/setup', { method: 'POST', body: JSON.stringify({ setup_token: token }) }),
   simpleFinSync: () => request('/import/simplefin/sync', { method: 'POST' }),
 
   // Chat
   chat: (message, history = []) => request('/chat', { method: 'POST', body: JSON.stringify({ message, history }) }),
+  chatBriefing: (data) => request('/chat/briefing', { method: 'POST', body: JSON.stringify(data) }),
   chatStream: async function* (message, history = []) {
     const headers = { 'Content-Type': 'application/json' };
     if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
@@ -110,8 +163,24 @@ export const api = {
   deleteCategory: (id) => request(`/settings/categories/${id}`, { method: 'DELETE' }),
   resetCategories: () => request('/settings/categories/reset', { method: 'POST' }),
   getAIConfig: () => request('/settings/ai'),
+  getAIHealth: () => request('/settings/ai/health'),
   getContributionRoom: () => request('/settings/contribution-room'),
   updateContributionRoom: (data) => request('/settings/contribution-room', { method: 'PUT', body: JSON.stringify(data) }),
 
-  setToken: (token) => { authToken = token; localStorage.setItem('clawfin_token', token); },
+  // Categorization rules
+  getRules: () => request('/settings/rules'),
+  createRule: (data) => request('/settings/rules', { method: 'POST', body: JSON.stringify(data) }),
+  previewRule: (data) => request('/settings/rules/preview', { method: 'POST', body: JSON.stringify(data) }),
+  getRuleImpact: (id) => request(`/settings/rules/${id}/impact`),
+  updateRule: (id, data) => request(`/settings/rules/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteRule: (id) => request(`/settings/rules/${id}`, { method: 'DELETE' }),
+  mergeMerchants: (data) => request('/settings/merchants/merge', { method: 'POST', body: JSON.stringify(data) }),
+  recategorize: (background = false) => request(`/transactions/recategorize${background ? '?background=true' : ''}`, { method: 'POST' }),
+  getRecategorizeJob: (id) => request(`/transactions/recategorize/${id}`),
+
+  // AI categorization toggle
+  getAIFlags: () => request('/settings/ai/flags'),
+  setAIFlags: (data) => request('/settings/ai/flags', { method: 'PUT', body: JSON.stringify(data) }),
+
+  setToken: (token) => { authToken = token; localStorage.setItem('autofin_token', token); },
 };

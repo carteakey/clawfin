@@ -90,4 +90,4 @@ npm run dev
 ## 🗺️ Phase Roadmap
 
 - **Phase 1 (Current)**: Foundation, Data Ingestion, UI Dashboard, AI Tools, Docker.
-- **Phase 2 (Next)**: Automated Rule Management UI, Advanced Budgeting Goals, Multi-user support.
+- **Phase 2 (Next)**: Become a lighter, agentic alternative to Actual Budget: ledger correctness (transaction kinds, transfer pairing), a review queue with rule dry-runs, savings scorecard + monthly P&L, and an MCP endpoint. See [docs/roadmap-actual-alternative.md](docs/roadmap-actual-alternative.md).
